@@ -18,6 +18,7 @@ pub enum Error {
     AlreadyExists     = 3,
     LimitExceeded     = 4,
     NotInitialized    = 5,
+    SlippageExceeded  = 6,
 }
 
 // ── Input limits ─────────────────────────────────────────────────────────────
@@ -46,6 +47,15 @@ pub enum DataKey {
     EventLog(u64),              // seq → DecodedEvent
     EventSeq,
     IndexerAllowlist,       // → Vec<Address> of trusted event submitters
+    MarketPool(u64),        // market_id → MarketPool
+}
+
+/// Parimutuel market betting pool totals.
+#[contracttype]
+#[derive(Clone, Default)]
+pub struct MarketPool {
+    pub total_yes: i128,
+    pub total_no:  i128,
 }
 
 // ── Limits & TTL ──────────────────────────────────────────────────────────────
@@ -504,6 +514,90 @@ impl ExplorerContract {
             }
         }
         out
+    }
+
+    // ── Prediction Market & Slippage Protection ──────────────────────────────
+
+    /// Calculate parimutuel odds in basis points (1 to 10,000, representing 0.01% to 100.00%).
+    /// If pool is empty, returns balanced default of 5,000 bps (50.00%).
+    pub fn compute_odds(total_yes: i128, total_no: i128, is_yes: bool) -> u32 {
+        let total = total_yes.saturating_add(total_no);
+        if total <= 0 {
+            return 5000;
+        }
+        let pool = if is_yes { total_yes } else { total_no };
+        if pool <= 0 {
+            return 1;
+        }
+        let odds = (pool.saturating_mul(10000)) / total;
+        odds.min(10000) as u32
+    }
+
+    /// Place a bet with slippage protection.
+    ///
+    /// `min_acceptable_odds`: Minimum acceptable odds in basis points (e.g. 6500 = 65.00%).
+    /// If current market odds are lower than `min_acceptable_odds`, the transaction reverts
+    /// with `Error::SlippageExceeded` to protect users against sandwiching or sudden odds shifts.
+    pub fn place_bet(
+        env: Env,
+        caller: Address,
+        market_id: u64,
+        is_yes: bool,
+        amount: i128,
+        min_acceptable_odds: u32,
+    ) -> u32 {
+        caller.require_auth();
+
+        if amount <= 0 {
+            panic_with_error!(&env, Error::LimitExceeded);
+        }
+
+        let pool_key = DataKey::MarketPool(market_id);
+        let mut pool: MarketPool = env
+            .storage()
+            .persistent()
+            .get(&pool_key)
+            .unwrap_or(MarketPool { total_yes: 0, total_no: 0 });
+
+        let current_odds = Self::compute_odds(pool.total_yes, pool.total_no, is_yes);
+
+        if current_odds < min_acceptable_odds {
+            panic_with_error!(&env, Error::SlippageExceeded);
+        }
+
+        if is_yes {
+            pool.total_yes = pool.total_yes.saturating_add(amount);
+        } else {
+            pool.total_no = pool.total_no.saturating_add(amount);
+        }
+
+        env.storage().persistent().set(&pool_key, &pool);
+        Self::bump_ttl(&env);
+
+        env.events().publish(
+            (symbol_short!("bet"), market_id, caller),
+            (is_yes, amount, current_odds),
+        );
+
+        current_odds
+    }
+
+    /// Return current market odds in basis points for an outcome.
+    pub fn get_odds(env: Env, market_id: u64, is_yes: bool) -> u32 {
+        let pool: MarketPool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MarketPool(market_id))
+            .unwrap_or(MarketPool { total_yes: 0, total_no: 0 });
+        Self::compute_odds(pool.total_yes, pool.total_no, is_yes)
+    }
+
+    /// Return pool totals for a market.
+    pub fn get_pool(env: Env, market_id: u64) -> MarketPool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MarketPool(market_id))
+            .unwrap_or(MarketPool { total_yes: 0, total_no: 0 })
     }
 }
 
@@ -1124,5 +1218,42 @@ mod tests {
             String::from_str(&env, "StellarSwap v2"),
         );
         assert_eq!(client.get_contract(&cid).name, String::from_str(&env, "StellarSwap v2"));
+    }
+
+    // ── Slippage protection tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_compute_odds_initial_and_populated() {
+        assert_eq!(ExplorerContract::compute_odds(0, 0, true), 5000);
+        // 70 YES vs 30 NO -> YES odds = 7000 bps (70%)
+        assert_eq!(ExplorerContract::compute_odds(70, 30, true), 7000);
+        // 70 YES vs 30 NO -> NO odds = 3000 bps (30%)
+        assert_eq!(ExplorerContract::compute_odds(70, 30, false), 3000);
+    }
+
+    #[test]
+    fn test_place_bet_succeeds_within_slippage() {
+        let (env, client) = setup!();
+        let user = Address::generate(&env);
+        let market_id = 42u64;
+
+        // Current initial odds 5000 bps (50%), min_odds 4500 bps (45%) -> succeeds
+        let odds = client.place_bet(&user, &market_id, &true, &1000i128, &4500u32);
+        assert_eq!(odds, 5000);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_place_bet_reverts_when_slippage_exceeded() {
+        let (env, client) = setup!();
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        let market_id = 99u64;
+
+        // User 1 bets 900 on NO, pool becomes 0 YES, 900 NO. YES odds drop to 1 bps
+        client.place_bet(&user1, &market_id, &false, &900i128, &1000u32);
+
+        // User 2 expects at least 4000 bps (40%) on YES, but odds are 1 bps -> must panic
+        client.place_bet(&user2, &market_id, &true, &100i128, &4000u32);
     }
 }

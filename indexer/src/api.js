@@ -5,6 +5,8 @@ import { db } from "./db.js";
 import { fetchTokenMetadata } from "./sep41Metadata.js";
 import { health } from "./index.js";
 import { eventEmitter } from "./events.js";
+import { securityHeaders } from "./middleware/securityHeaders.js";
+import { createCorsMiddleware } from "./middleware/cors.js";
 
 const PORT = process.env.PORT || 3001;
 
@@ -85,6 +87,8 @@ export function validateContractPayload(body) {
 export function createApp() {
   const app = express();
   let distinctFunctionsCache = null;
+  app.use(securityHeaders);
+  app.use(createCorsMiddleware());
   app.use(express.json());
 
   // GET /health — liveness + readiness probe for container orchestrators and uptime monitors

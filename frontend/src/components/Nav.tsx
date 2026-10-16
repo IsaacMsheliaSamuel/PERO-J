@@ -75,6 +75,9 @@ export default function Nav() {
           <NavLink to="/contracts" onClick={() => setMenuOpen(false)} style={({ isActive }) => linkStyle(isActive)}>
             Contracts
           </NavLink>
+          <NavLink to="/bet" onClick={() => setMenuOpen(false)} style={({ isActive }) => linkStyle(isActive)}>
+            Bet
+          </NavLink>
           <form onSubmit={search} className="nav-search">
             <input
               value={q}

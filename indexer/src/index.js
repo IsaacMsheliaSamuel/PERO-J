@@ -19,12 +19,6 @@ const POLL_MS = resolvePollMs();
 const RPC_ERROR_THRESHOLD = 3;
 const EXPLORER_CONTRACT_ID = process.env.SOROBAN_EXPLORER_CONTRACT_ID;
 
-/**
- * Advisory lock id used to serialize migrations across indexer instances.
- * Any two instances sharing this id will not run migrations concurrently.
- */
-const MIGRATION_LOCK_ID = 836;
-
 let rpc = new SorobanRpc.Server(RPC_URL, { allowHttp: true });
 
 /**
@@ -190,36 +184,18 @@ process.on("SIGHUP", () => {
 });
 
 /**
- * Run migrations under a Postgres advisory lock so that two indexer instances
- * starting at the same time cannot run migrations concurrently (which would
- * cause duplicate-key errors or partial state).
+ * Run migrations before starting the API/poller.
  *
- * The lock is always released in `finally`; a failed unlock is logged but
- * never masks the original migration error.
+ * `db.init()` acquires its own Postgres advisory lock internally (see db.js),
+ * so two indexer instances starting concurrently cannot run migrations at the
+ * same time. There is no need for an additional outer lock here.
  */
-async function initWithMigrationLock() {
-  await db.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
-  try {
-    await db.init();
-  } catch (err) {
-    // Roll back any partial migration state before releasing the lock.
-    try {
-      await db.query("ROLLBACK");
-    } catch (rollbackErr) {
-      console.error("[migrations] rollback failed:", rollbackErr.message);
-    }
-    throw err;
-  } finally {
-    try {
-      await db.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);
-    } catch (unlockErr) {
-      console.error("[migrations] failed to release advisory lock:", unlockErr.message);
-    }
-  }
+async function runMigrations() {
+  await db.init();
 }
 
 async function run() {
-  await initWithMigrationLock();
+  await runMigrations();
   await registerFixtures().catch((err) => {
     console.error("[fixtures] failed to register ABI fixtures:", err.message);
   });

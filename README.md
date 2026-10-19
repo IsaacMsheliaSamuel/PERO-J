@@ -385,6 +385,17 @@ For any cloud provider, also export a `pg_dump` weekly to object storage (S3, GC
 
 ---
 
+## Production Docker images
+
+The indexer ships an optimized multi-stage production image
+(`indexer/Dockerfile` / `indexer/Dockerfile.indexer`): production-only
+dependencies (no dev deps), the transitive `sodium-native` native package
+stripped, docs/tests/source-maps pruned, and a non-root `appuser` runtime. The
+result is a ~140MB uncompressed (~50MB compressed) image that never runs as
+root, with the Kubernetes deployment enforcing `runAsNonRoot` and dropping all
+Linux capabilities. See [docs/kubernetes-deployment.md](docs/kubernetes-deployment.md)
+for the hardening details.
+
 ## Contributing
 
 PRs welcome. Please open an issue first for large changes.

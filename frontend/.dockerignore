@@ -1,0 +1,12 @@
+node_modules
+dist
+npm-debug.log*
+.env
+.env.local
+.git
+.gitignore
+*.md
+Dockerfile
+Dockerfile.prod
+nginx.conf
+.DS_Store

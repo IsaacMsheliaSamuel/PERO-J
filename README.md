@@ -385,6 +385,23 @@ For any cloud provider, also export a `pg_dump` weekly to object storage (S3, GC
 
 ---
 
+## Staging deployment
+
+Merging to `main` automatically deploys the latest code to the staging
+environment on Stellar **testnet** via the
+[`deploy-staging.yml`](.github/workflows/deploy-staging.yml) workflow:
+
+1. Builds the indexer and frontend (production) Docker images and pushes them
+   to the GitHub Container Registry (`ghcr.io`).
+2. Deploys the updated images to the `pero-j-staging` Kubernetes namespace
+   (connected to testnet via the staging ConfigMap).
+3. Runs the testnet smoke test suite (`scripts/smoke-test.sh`) against the
+   staging endpoints.
+
+Staging reflects the latest `main` within ~10 minutes of a merge. See
+[docs/kubernetes-deployment.md](docs/kubernetes-deployment.md) for the required
+secrets and the staging manifest layout.
+
 ## Contributing
 
 PRs welcome. Please open an issue first for large changes.

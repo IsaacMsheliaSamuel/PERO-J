@@ -8,6 +8,9 @@ import { reloadSacMap } from "./sac.js";
 import { validateNetwork } from "./validateNetwork.js";
 import { submitEvent } from "./contract.js";
 import { resolvePollMs } from "./resolvePollMs.js";
+import { handleOracleSubmission } from "./handlers/oracle_submission.js";
+import { handleOracleDispute } from "./handlers/oracle_dispute.js";
+import { handleOracleFinalized } from "./handlers/oracle_finalized.js";
 
 dotenv.config();
 
@@ -115,6 +118,25 @@ export async function indexLedger(ledger, rpcClient = rpc) {
     }
     await db.upsertEvent(decoded);
     console.log(`[${ev.ledger}] ${decoded.function}: ${decoded.description}`);
+
+    // Route oracle events to their handlers
+    const topics = ev.topic.map((t) => {
+      try {
+        return typeof t.sym === "function" ? t.sym() : t.value?.()?.sym?.() ?? String(t);
+      } catch {
+        return String(t);
+      }
+    });
+    
+    const data = ev.value;
+
+    if (decoded.function === "oracle_submission") {
+      await handleOracleSubmission(decoded, topics, data);
+    } else if (decoded.function === "oracle_dispute") {
+      await handleOracleDispute(decoded, topics, data);
+    } else if (decoded.function === "oracle_finalized") {
+      await handleOracleFinalized(decoded, topics, data);
+    }
   }
 
   // Record the time we finished processing this ledger batch

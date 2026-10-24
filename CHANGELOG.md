@@ -980,6 +980,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`6eb65ed`](../../commit/6eb65edc51a6743dcfdd2b9e83fc19c919ca8468))
+
 - Auto-update CHANGELOG.md [skip ci] ([`023c511`](../../commit/023c51174b12f2720c40c8da1b9db19d4a47a0f7))
 
 - Auto-update CHANGELOG.md [skip ci] ([`f76dd57`](../../commit/f76dd5753d61f8ac857dcea37391aed37cdef53e))
@@ -1726,6 +1728,8 @@ Add a tests/integration/ directory with stub tests that document the
 
 
 ### Security
+
+- Add input sanitization and length limits on market fields ([#1031](../../issues/1031)) ([`2e08a8a`](../../commit/2e08a8a0490b6f195126cac09f532324cd2e9226))
 
 - Conduct formal invariant audit for contract balance vs betting pool and fees ([#1029](../../issues/1029)) ([`9fa74ba`](../../commit/9fa74ba8e5deaf5a707e5604fc91422f18096579))
 

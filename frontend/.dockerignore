@@ -6,7 +6,4 @@ npm-debug.log*
 .git
 .gitignore
 *.md
-Dockerfile
-Dockerfile.prod
-nginx.conf
 .DS_Store

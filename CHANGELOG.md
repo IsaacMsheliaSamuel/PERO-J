@@ -8,6 +8,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Bug Fixes
 
+- [#1010](../../issues/1010) ci: add PostgreSQL and Redis service containers for automated ([`8a75968`](../../commit/8a75968f5bab518935890dd1dd367f3b1f7df5f8))
+
+Closes [#1010](../../issues/1010)
+
+
+- [#1009](../../issues/1009) ci: expand GitHub Actions workflow matrix to test backend, in ([`088f040`](../../commit/088f040d4f953ac8450e88a1d2247f50017aa77b))
+
+Closes [#1009](../../issues/1009)
+
+
+- [#1008](../../issues/1008) fix(frontend): audit accessibility (a11y) landmarks, ARIA lab ([`6b04971`](../../commit/6b04971133b54b3cf253fa8fcf6172b57e26fcf3))
+
+Closes [#1008](../../issues/1008)
+
+
+- [#1006](../../issues/1006) perf(frontend): dynamic import heavy chart libraries to reduc ([`a8df3b3`](../../commit/a8df3b3f16df6ed735e8942904850cf42f6f890e))
+
+Closes [#1006](../../issues/1006)
+
+
 - [#747](../../issues/747) `get_events()` must cap `limit` to prevent CPU exhaustion ([`58139bf`](../../commit/58139bfb29c0e0cddc1af6f34af9566a4ccb5a11))
 
 Closes [#747](../../issues/747)
@@ -960,6 +980,14 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`6eb65ed`](../../commit/6eb65edc51a6743dcfdd2b9e83fc19c919ca8468))
+
+- Auto-update CHANGELOG.md [skip ci] ([`023c511`](../../commit/023c51174b12f2720c40c8da1b9db19d4a47a0f7))
+
+- Auto-update CHANGELOG.md [skip ci] ([`f76dd57`](../../commit/f76dd5753d61f8ac857dcea37391aed37cdef53e))
+
+- Auto-update CHANGELOG.md [skip ci] ([`56295de`](../../commit/56295de01c5a70d247292ac42c446b96a1c46d4c))
+
 - Auto-update CHANGELOG.md [skip ci] ([`df45aa3`](../../commit/df45aa3ccd5217cd703bbc30fb6148424a37feea))
 
 - Auto-update CHANGELOG.md [skip ci] ([`dbc88a1`](../../commit/dbc88a16b9a22db110cef890e8ff377aa262f53c))
@@ -1286,6 +1314,27 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 
 ### Features
+
+- Network status chip and contract error toasts ([#999](../../issues/999), [#1001](../../issues/1001)) ([`5dac915`](../../commit/5dac9159607ea77ad3617f421f0225ab5074d87e))
+
+Issue [#999](../../issues/999) - Network and connection status indicator:
+  - Add useNetworkStatus hook tracking navigator.onLine + SSE health
+  - Add NetworkStatusChip component (Live/Reconnecting.../Offline) with
+    colored animated dots rendered in the Nav header
+  - Tests: 3 cases covering live, offline, reconnecting states
+
+  Issue [#1001](../../issues/1001) - Map Soroban contract error codes 21-28 to friendly toasts:
+  - Add frontend/src/lib/contract-errors.ts mapping codes 21-28 to
+    human-readable messages and actionable resolution advice
+  - Add ToastProvider/useToast in Toast.tsx for in-app notifications
+  - Add useContractError hook that catches known contract errors and
+    fires a toast; re-throws unknown errors
+  - Wrap app root with ToastProvider in main.tsx
+  - Tests: 7 cases covering all codes, unknown codes, both parse formats
+
+  Closes [#999](../../issues/999)
+  Closes [#1001](../../issues/1001)
+
 
 - Configure database pool size ([`df7e5bb`](../../commit/df7e5bbd7b70c022f583f715bd716993b77d7f55))
 
@@ -1676,6 +1725,13 @@ Add a tests/integration/ directory with stub tests that document the
 ### Indexer
 
 - Treat 'function not found' as missing in validateSep41 ([`8c3d338`](../../commit/8c3d338dafb16a53a8035b1db346a5ea28bc3723))
+
+
+### Security
+
+- Add input sanitization and length limits on market fields ([#1031](../../issues/1031)) ([`2e08a8a`](../../commit/2e08a8a0490b6f195126cac09f532324cd2e9226))
+
+- Conduct formal invariant audit for contract balance vs betting pool and fees ([#1029](../../issues/1029)) ([`9fa74ba`](../../commit/9fa74ba8e5deaf5a707e5604fc91422f18096579))
 
 
 

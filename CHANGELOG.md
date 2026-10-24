@@ -980,6 +980,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`4b07303`](../../commit/4b073032ea87f41c79bac0821473513962ec68e1))
+
 - Auto-update CHANGELOG.md [skip ci] ([`6a8952c`](../../commit/6a8952c6bf5aee832e479db4196c17bbecf761ee))
 
 - Auto-update CHANGELOG.md [skip ci] ([`21be3f2`](../../commit/21be3f2cf122fce3727ef37e97ef4096d4e40ebf))
@@ -1340,6 +1342,39 @@ Issue [#999](../../issues/999) - Network and connection status indicator:
   Closes [#1001](../../issues/1001)
 
 
+- Interactive BetSlip ROI calculator, mobile responsive layout, referral link generator, dark/light theme toggle ([`70a5311`](../../commit/70a5311625e2bab534ea275ba51bd64aa0ad3192))
+
+[#1005](../../issues/1005) - Add BetSlip.tsx with real-time parimutuel payout calculator:
+    - Formula: payout = (stake / (pool + stake)) * totalPool * 0.98
+    - Displays multiplier, net profit, ROI, and 2% protocol fee breakdown
+    - Stake input + range slider + quick-select chips
+    - aria-live payout breakdown updates in real time
+
+  [#1007](../../issues/1007) - Mobile responsive layout improvements:
+    - BetSlip renders as a fixed bottom-sheet drawer on viewports < 640px
+    - All interactive touch targets >= 48px (buttons, inputs, chips)
+    - Single-column layout on mobile; secondary table columns hidden
+    - CSS transform-based slide-up animation for smooth drawer open
+
+  [#1003](../../issues/1003) - Referral link generator at /referrals:
+    - Generates unique referral URL from Stellar wallet address
+    - One-click copy-to-clipboard with fallback for older browsers
+    - One-click social share: X (Twitter), Telegram, WhatsApp
+    - Pre-populated marketing copy in share URLs
+    - Dynamic OpenGraph + Twitter Card meta tags updated client-side
+    - Full og:image, og:title, og:description, twitter:card tags in index.html
+
+  [#1004](../../issues/1004) - Dark/light theme toggle:
+    - Full CSS custom property audit: --bg-primary, --bg-secondary,
+      --text-primary, --text-secondary, --border-color, --accent, etc.
+    - Explicit :root[data-theme='dark'] and :root[data-theme='light'] blocks
+    - System prefers-color-scheme sync via MediaQueryList listener
+    - localStorage persistence; system preference respected when no override
+    - Theme toggle button in Nav with accessible aria-label and emoji icons
+
+  Also fix pre-existing Home.tsx TypeScript errors (useCustom, activeFn undefined)
+
+
 - Configure database pool size ([`df7e5bb`](../../commit/df7e5bbd7b70c022f583f715bd716993b77d7f55))
 
 - Add SEP-41 token metadata endpoint ([#816](../../issues/816)) ([`77ee7d8`](../../commit/77ee7d8bd455a71a0235b348d35bef8f197496fb))
@@ -1416,39 +1451,6 @@ Add a dedicated buildDescription case for the SEP-41 approve function so
   function call.
 
   Closes [#402](../../issues/402), [#404](../../issues/404), [#397](../../issues/397), [#403](../../issues/403)
-
-
-- Interactive BetSlip ROI calculator, mobile responsive layout, referral link generator, dark/light theme toggle ([`70a5311`](../../commit/70a5311625e2bab534ea275ba51bd64aa0ad3192))
-
-[#1005](../../issues/1005) - Add BetSlip.tsx with real-time parimutuel payout calculator:
-    - Formula: payout = (stake / (pool + stake)) * totalPool * 0.98
-    - Displays multiplier, net profit, ROI, and 2% protocol fee breakdown
-    - Stake input + range slider + quick-select chips
-    - aria-live payout breakdown updates in real time
-
-  [#1007](../../issues/1007) - Mobile responsive layout improvements:
-    - BetSlip renders as a fixed bottom-sheet drawer on viewports < 640px
-    - All interactive touch targets >= 48px (buttons, inputs, chips)
-    - Single-column layout on mobile; secondary table columns hidden
-    - CSS transform-based slide-up animation for smooth drawer open
-
-  [#1003](../../issues/1003) - Referral link generator at /referrals:
-    - Generates unique referral URL from Stellar wallet address
-    - One-click copy-to-clipboard with fallback for older browsers
-    - One-click social share: X (Twitter), Telegram, WhatsApp
-    - Pre-populated marketing copy in share URLs
-    - Dynamic OpenGraph + Twitter Card meta tags updated client-side
-    - Full og:image, og:title, og:description, twitter:card tags in index.html
-
-  [#1004](../../issues/1004) - Dark/light theme toggle:
-    - Full CSS custom property audit: --bg-primary, --bg-secondary,
-      --text-primary, --text-secondary, --border-color, --accent, etc.
-    - Explicit :root[data-theme='dark'] and :root[data-theme='light'] blocks
-    - System prefers-color-scheme sync via MediaQueryList listener
-    - localStorage persistence; system preference respected when no override
-    - Theme toggle button in Nav with accessible aria-label and emoji icons
-
-  Also fix pre-existing Home.tsx TypeScript errors (useCustom, activeFn undefined)
 
 
 - Add dedicated expand button for long descriptions in EventTable ([`1a14bf3`](../../commit/1a14bf3abef7b40285eac0201fe2eeb8ff9d55ac))
@@ -1771,6 +1773,8 @@ Add a tests/integration/ directory with stub tests that document the
 - Conduct formal invariant audit for contract balance vs betting pool and fees ([#1029](../../issues/1029)) ([`9fa74ba`](../../commit/9fa74ba8e5deaf5a707e5604fc91422f18096579))
 
 - Implement CORS and security headers policy (CSP, HSTS, X-Frame-Options) ([#1032](../../issues/1032)) ([`62bdf45`](../../commit/62bdf450f99204761e6218b770a647f4c488c8d1))
+
+- Add slippage protection for user bets placed during rapid odds fluctuations ([#1033](../../issues/1033)) ([`b995e72`](../../commit/b995e72c0bec4bae057aa5201919628bfa286c1f))
 
 
 

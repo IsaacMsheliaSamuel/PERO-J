@@ -94,6 +94,8 @@ export function validateContractPayload(body) {
 export function createApp() {
   const app = express();
   let distinctFunctionsCache = null;
+  app.use(securityHeaders);
+  app.use(createCorsMiddleware());
   app.use(express.json());
 
   // GET /health — liveness + readiness probe for container orchestrators and uptime monitors

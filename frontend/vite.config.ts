@@ -1,32 +1,30 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig(() => {
-  // The proxy target is read from the real process environment so it works in
-  // Docker (where docker-compose sets VITE_API_PROXY). The config file runs in
-  // Node, so process.env has the container env. Defaults to the indexer's host
-  // port for local non-docker dev. VITE_API_PROXY is NOT exposed to the client
-  // (only the proxy behaviour uses it server-side).
-  const apiProxyTarget = process.env.VITE_API_PROXY || 'http://localhost:3001'
-
-  return {
-    plugins: [react()],
-    server: {
-      host: true,
-      proxy: {
-        // Proxy /api to the indexer so the browser only talks to the Vite
-        // dev server (no CORS). Override the target via VITE_API_PROXY.
-        '/api': {
-          target: apiProxyTarget,
-          changeOrigin: true,
-        },
-      },
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://horizon-testnet.stellar.org https://soroban-testnet.stellar.org https://*.stellar.org; frame-ancestors 'none'; object-src 'none';",
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
-    test: {
-      globals: true,
-      environment: 'jsdom',
-      setupFiles: './src/test/setup.ts',
-      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
+  preview: {
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://horizon-testnet.stellar.org https://soroban-testnet.stellar.org https://*.stellar.org; frame-ancestors 'none'; object-src 'none';",
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
-  }
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
 })

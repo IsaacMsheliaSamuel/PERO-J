@@ -52,6 +52,7 @@ export default function Nav() {
         <NavLink
           to="/"
           onClick={() => setMenuOpen(false)}
+          aria-label="Soroban Explorer home"
           style={({ isActive }) => ({
             fontWeight: 700,
             fontSize: 16,
@@ -61,23 +62,28 @@ export default function Nav() {
             paddingBottom: isActive ? "4px" : "0px",
           })}
         >
-          ⬡ Soroban Explorer
+          <span aria-hidden="true">⬡</span> Soroban Explorer
         </NavLink>
         <button
           type="button"
           className="nav-toggle"
-          aria-label="Toggle navigation menu"
+          aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
           aria-expanded={menuOpen}
+          aria-controls="primary-navigation"
           onClick={() => setMenuOpen((o) => !o)}
         >
-          ☰
+          <span aria-hidden="true">☰</span>
         </button>
-        <nav className={`nav-links${menuOpen ? " open" : ""}`}>
+        <nav id="primary-navigation" aria-label="Primary" className={`nav-links${menuOpen ? " open" : ""}`}>
           <NavLink to="/contracts" onClick={() => setMenuOpen(false)} style={({ isActive }) => linkStyle(isActive)}>
             Contracts
           </NavLink>
-          <form onSubmit={search} className="nav-search">
+          <form onSubmit={search} className="nav-search" role="search">
+            <label htmlFor="nav-search-input" className="sr-only">
+              Search contract ID or wallet address
+            </label>
             <input
+              id="nav-search-input"
               value={q}
               onChange={e => setQ(e.target.value)}
               placeholder="Search contract ID or wallet address…"

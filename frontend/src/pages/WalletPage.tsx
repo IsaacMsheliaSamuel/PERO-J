@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { StrKey } from "@stellar/stellar-sdk";
 import { api } from "../api";
+import { useBets } from "../bets/BetsContext";
+import BetRow from "../bets/BetRow";
 import EventTable from "../components/EventTable";
 import Skeleton from "../components/Skeleton";
 
@@ -29,6 +31,17 @@ export default function WalletPage() {
   const events = data?.events ?? [];
   const total = data?.total ?? 0;
   const limit = data?.limit ?? 25;
+
+  const { pendingBets } = useBets();
+  const optimisticBets = useMemo(
+    () =>
+      pendingBets.filter(
+        (bet) =>
+          bet.address === address &&
+          !events.some((ev) => ev.tx_hash && ev.tx_hash === bet.txHash)
+      ),
+    [address, events, pendingBets]
+  );
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -60,13 +73,22 @@ export default function WalletPage() {
           ? <p style={{ color: "var(--muted)" }}>Enter a Stellar address to view wallet history.</p>
           : !isValidAddress
           ? <p style={{ color: "var(--muted)" }}>Invalid Stellar address.</p>
-          : isLoading
-          ? <Skeleton />
-          : <EventTable
-            events={events}
-            emptyMessage="No events found for this address."
-            emptySubtitle="This address has no indexed events."
-          />}
+          : <>
+              {optimisticBets.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  {optimisticBets.map((bet) => (
+                    <BetRow key={bet.id} bet={bet} />
+                  ))}
+                </div>
+              )}
+              {isLoading
+                ? <Skeleton />
+                : <EventTable
+                  events={events}
+                  emptyMessage="No events found for this address."
+                  emptySubtitle="This address has no indexed events."
+                />}
+            </>}
       </div>
 
       {/* Pagination */}

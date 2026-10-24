@@ -8,6 +8,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Bug Fixes
 
+- [#1010](../../issues/1010) ci: add PostgreSQL and Redis service containers for automated ([`8a75968`](../../commit/8a75968f5bab518935890dd1dd367f3b1f7df5f8))
+
+Closes [#1010](../../issues/1010)
+
+
+- [#1009](../../issues/1009) ci: expand GitHub Actions workflow matrix to test backend, in ([`088f040`](../../commit/088f040d4f953ac8450e88a1d2247f50017aa77b))
+
+Closes [#1009](../../issues/1009)
+
+
+- [#1008](../../issues/1008) fix(frontend): audit accessibility (a11y) landmarks, ARIA lab ([`6b04971`](../../commit/6b04971133b54b3cf253fa8fcf6172b57e26fcf3))
+
+Closes [#1008](../../issues/1008)
+
+
+- [#1006](../../issues/1006) perf(frontend): dynamic import heavy chart libraries to reduc ([`a8df3b3`](../../commit/a8df3b3f16df6ed735e8942904850cf42f6f890e))
+
+Closes [#1006](../../issues/1006)
+
+
 - [#747](../../issues/747) `get_events()` must cap `limit` to prevent CPU exhaustion ([`58139bf`](../../commit/58139bfb29c0e0cddc1af6f34af9566a4ccb5a11))
 
 Closes [#747](../../issues/747)
@@ -959,6 +979,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 
 ### Documentation
+
+- Auto-update CHANGELOG.md [skip ci] ([`f76dd57`](../../commit/f76dd5753d61f8ac857dcea37391aed37cdef53e))
 
 - Auto-update CHANGELOG.md [skip ci] ([`56295de`](../../commit/56295de01c5a70d247292ac42c446b96a1c46d4c))
 

@@ -6,6 +6,7 @@ import { eventEmitter } from "./events.js";
 /** @typedef {import('./types.js').VolumeResult} VolumeResult */
 
 const DEFAULT_POOL_SIZE = 20;
+const PING_TIMEOUT_MS = 5000;
 
 /**
  * Parse and validate DATABASE_POOL_SIZE environment variable.
@@ -37,6 +38,12 @@ const pool = new pg.Pool({
 });
 const MIGRATION_LOCK_ID = 57_056;
 const MAX_PAGE = 200;
+
+function escapeLikePattern(value) {
+  return String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/[\[%_]/g, "\\$&");
+}
 
 const migrations = [
   {
@@ -101,6 +108,24 @@ const migrations = [
       UPDATE events SET event_addresses = ARRAY[]::TEXT[] WHERE event_addresses IS NULL;
     `,
   },
+  {
+    id: 5,
+    name: "add_description_tsvector_gin_index",
+    sql: `
+      ALTER TABLE events
+        ADD COLUMN IF NOT EXISTS description_tsv TSVECTOR
+          GENERATED ALWAYS AS (to_tsvector('english', description)) STORED;
+      CREATE INDEX IF NOT EXISTS idx_events_description_tsv
+        ON events USING GIN(description_tsv);
+    `,
+  },
+  {
+    id: 6,
+    name: "ensure_events_sac_asset_column",
+    sql: `
+      ALTER TABLE events ADD COLUMN IF NOT EXISTS sac_asset TEXT;
+    `,
+  },
 ];
 
 process.on("unhandledRejection", async (err) => {
@@ -154,7 +179,15 @@ export const db = {
       await client.query("ROLLBACK");
       throw err;
     } finally {
-      await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);
+      // The unlock is wrapped in its own try/catch so that a failure here
+      // (e.g. the connection was dropped during ROLLBACK) is logged but does
+      // not mask the original error or block future indexer startups waiting
+      // on the advisory lock being released by the server on disconnect.
+      try {
+        await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);
+      } catch (unlockErr) {
+        console.error("Failed to release migration advisory lock:", unlockErr);
+      }
       client.release();
     }
   },
@@ -166,7 +199,7 @@ export const db = {
    */
   async ping() {
     try {
-      await pool.query("SELECT 1");
+      await pool.query({ text: "SELECT 1", query_timeout: PING_TIMEOUT_MS });
       return true;
     } catch {
       return false;
@@ -192,8 +225,8 @@ export const db = {
    */
   async upsertEvent(ev) {
     await pool.query(
-      `INSERT INTO events (contract_id, function, ledger, tx_hash, description, raw_topics, raw_data, sac_asset, event_addresses)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO events (contract_id, function, ledger, tx_hash, description, raw_topics, raw_data, sac_asset, event_addresses, onchain_seq)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT DO NOTHING`,
       [
         ev.contract_id,
@@ -205,6 +238,7 @@ export const db = {
         ev.raw_data,
         ev.sac_asset ?? null,
         ev.event_addresses ?? [],
+        ev.onchain_seq ?? null,
       ]
     );
     eventEmitter.emit("event", ev);
@@ -236,8 +270,20 @@ export const db = {
       conditions.push(`function = $${params.length}`);
     }
     if (q) {
-      params.push(`%${q}%`);
-      conditions.push(`description ILIKE $${params.length}`);
+      // Use the GIN-indexed tsvector column for word-only queries (letters,
+      // digits, underscores, and spaces) so PostgreSQL can use the index scan.
+      // Fall back to ILIKE for queries that contain special characters (e.g.
+      // punctuation, operators, glob chars) which plainto_tsquery would strip
+      // or misinterpret.
+      const isWordSafe = /^[\w\s]+$/.test(q);
+      if (isWordSafe) {
+        params.push(q);
+        conditions.push(`description_tsv @@ plainto_tsquery('english', $${params.length})`);
+      } else {
+        const escapedQ = escapeLikePattern(q);
+        params.push(`%${escapedQ}%`);
+        conditions.push(`description ILIKE $${params.length} ESCAPE '\\'`);
+      }
     }
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const countParams = [...params];
@@ -278,18 +324,22 @@ export const db = {
    * @returns {Promise<{ events: DecodedEvent[], total: number, page: number, limit: number }>}
    */
   async getWalletEvents(address, { page = 1, limit = 25 } = {}) {
-    const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 25;
+    const parsedPage = Number(page);
+    const parsedLimit = Number(limit);
+    const pageNum = Number.isFinite(parsedPage) ? Math.max(1, Math.floor(parsedPage)) : 1;
+    const limitNum = Number.isFinite(parsedLimit)
+      ? Math.min(MAX_PAGE, Math.max(1, Math.floor(parsedLimit)))
+      : 25;
     const offset = (pageNum - 1) * limitNum;
 
     const countRes = await pool.query(
-      "SELECT COUNT(*) FROM events WHERE COALESCE(event_addresses, ARRAY[]::TEXT[]) @> ARRAY[$1]",
+      "SELECT COUNT(*) FROM events WHERE event_addresses @> ARRAY[$1] AND COALESCE(event_addresses, ARRAY[]::TEXT[]) @> ARRAY[$1]",
       [address]
     );
     const total = parseInt(countRes.rows[0].count, 10);
 
     const { rows } = await pool.query(
-      "SELECT * FROM events WHERE COALESCE(event_addresses, ARRAY[]::TEXT[]) @> ARRAY[$1] ORDER BY ledger DESC LIMIT $2 OFFSET $3",
+      "SELECT * FROM events WHERE event_addresses @> ARRAY[$1] AND COALESCE(event_addresses, ARRAY[]::TEXT[]) @> ARRAY[$1] ORDER BY ledger DESC LIMIT $2 OFFSET $3",
       [address, limitNum, offset]
     );
 
@@ -324,8 +374,11 @@ export const db = {
     const conditions = [];
     const params = [];
     if (q) {
-      params.push(`%${q}%`);
-      conditions.push(`(name ILIKE $${params.length} OR description ILIKE $${params.length})`);
+      const escapedQ = escapeLikePattern(q);
+      params.push(`%${escapedQ}%`);
+      conditions.push(
+        `(name ILIKE $${params.length} ESCAPE '\\' OR description ILIKE $${params.length} ESCAPE '\\')`
+      );
     }
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
@@ -333,10 +386,19 @@ export const db = {
     const total = parseInt(countRes.rows[0].count, 10);
 
     const offset = (pageNum - 1) * limitNum;
+    // Push LIMIT and OFFSET into the params array so their $N positions are
+    // always params.length (after push) regardless of how many filter params
+    // precede them. This avoids the fragile +1/+2 arithmetic that breaks when
+    // additional WHERE conditions are added.
+    const selectParams = [...params];
+    selectParams.push(limitNum);
+    const limitIdx = selectParams.length; // e.g. 1 when no q, 2 when q present
+    selectParams.push(offset);
+    const offsetIdx = selectParams.length; // limitIdx + 1
     const { rows } = await pool.query(
       `SELECT * FROM contracts ${where}
-       ORDER BY name ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limitNum, offset]
+       ORDER BY name ASC LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      selectParams
     );
     return { contracts: rows, total, page: pageNum, limit: limitNum };
   },
@@ -357,7 +419,10 @@ export const db = {
        WHERE contract_id = $1
          AND function    = 'transfer'
          AND raw_data IS NOT NULL
-         AND raw_data LIKE '{%'
+         -- Match the first non-whitespace char so only object-shaped JSON
+         -- (tolerating leading whitespace) reaches the ::jsonb cast below;
+         -- arrays and other non-object JSON are excluded, not miscast.
+         AND raw_data ~ '^\\s*\\{'
          AND created_at >= NOW() - INTERVAL '24 hours'`,
       [contractId]
     );
@@ -421,10 +486,10 @@ export const db = {
   async getLeaderboard(limit = 10) {
     const capped = Math.min(Math.max(Number(limit) || 10, 1), 50);
     const { rows } = await pool.query(
-      `SELECT e.contract_id, c.name, COUNT(*) AS event_count
+      `SELECT e.contract_id, COALESCE(c.name, e.contract_id) AS name, COUNT(*) AS event_count
        FROM events e
-       JOIN contracts c ON c.id = e.contract_id
-       GROUP BY e.contract_id, c.name
+       LEFT JOIN contracts c ON c.id = e.contract_id
+       GROUP BY e.contract_id, COALESCE(c.name, e.contract_id)
        ORDER BY event_count DESC
        LIMIT $1`,
       [capped]

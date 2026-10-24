@@ -7,6 +7,7 @@ export interface DecodedEvent {
   ledger: number;
   description: string;
   raw_topics: string[];
+  raw_data?: string;
   tx_hash?: string;
   created_at?: string;
   sac_asset?: string;
@@ -20,6 +21,7 @@ export interface ContractMeta {
   functions: { name: string; description: string }[];
   registered_by?: string;
   created_at?: string;
+  event_count?: number;
 }
 
 export interface WalletEventsResponse {
@@ -43,14 +45,24 @@ export interface ContractsResponse {
   limit: number;
 }
 
-async function get<T>(path: string): Promise<T> {
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, path: string) {
+    super(`API ${status}: ${path}`);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 10_000);
 
   try {
-    const res = await fetch(BASE + path, { signal: controller.signal });
-    if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
-    return res.json();
+    const res = await fetch(BASE + path, { ...init, signal: controller.signal });
+    if (!res.ok) throw new ApiError(res.status, path);
+    return await res.json();
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error("Request timed out");
@@ -61,14 +73,16 @@ async function get<T>(path: string): Promise<T> {
   }
 }
 
+async function get<T>(path: string): Promise<T> {
+  return request<T>(path);
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
+  return request<T>(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
-  return res.json();
 }
 
 /**

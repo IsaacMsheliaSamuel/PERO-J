@@ -1,10 +1,11 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { LRUCache } from "lru-cache";
+import { StrKey } from "@stellar/stellar-sdk";
 import { db } from "./db.js";
 import { fetchTokenMetadata } from "./sep41Metadata.js";
 import { health } from "./index.js";
 import { eventEmitter } from "./events.js";
+import { MAX_TITLE_LEN, MAX_DESCRIPTION_LEN } from "./sanitize.js";
 
 const PORT = process.env.PORT || 3001;
 
@@ -46,8 +47,55 @@ export function errorHandler(err, req, res, _next) {
   res.status(500).json({ error: err.message || "Internal Server Error" });
 }
 
-export function startApi() {
+export function isValidStellarAddress(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const trimmed = value.trim();
+  return StrKey.isValidEd25519PublicKey(trimmed) || StrKey.isValidContract(trimmed);
+}
+
+/**
+ * Validates the payload for registering/updating contract ABI metadata.
+ *
+ * @param {unknown} body
+ * @returns {string|null} an error message when invalid, otherwise null
+ */
+export function validateContractPayload(body) {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return "Request body must be a JSON object";
+  }
+
+  const { id, name, description, functions } = body;
+
+  if (typeof id !== "string" || id.trim() === "") {
+    return "id must be a non-empty string";
+  }
+
+  if (typeof name !== "string" || name.trim() === "") {
+    return "name must be a non-empty string";
+  }
+
+  if (name.length > MAX_TITLE_LEN) {
+    return `name exceeds maximum limit of ${MAX_TITLE_LEN} characters`;
+  }
+
+  if (typeof description === "string" && description.length > MAX_DESCRIPTION_LEN) {
+    return `description exceeds maximum limit of ${MAX_DESCRIPTION_LEN} characters`;
+  }
+
+  if (!Array.isArray(functions)) {
+    return "functions must be an array";
+  }
+
+  return null;
+}
+
+export function createApp() {
   const app = express();
+  let distinctFunctionsCache = null;
+  app.use(securityHeaders);
+  app.use(createCorsMiddleware());
   app.use(express.json());
 
   // GET /health — liveness + readiness probe for container orchestrators and uptime monitors
@@ -69,7 +117,6 @@ export function startApi() {
         return res.status(503).json({
           status: "error",
           db: "disconnected",
-          latestLedger: health.lastLedger,
           uptime_seconds: uptimeSeconds,
           lag_seconds: lagSeconds,
           last_ledger: health.lastLedger,
@@ -85,7 +132,6 @@ export function startApi() {
       const body = {
         status,
         db: "connected",
-        latestLedger: health.lastLedger,
         uptime_seconds: uptimeSeconds,
         lag_seconds: lagSeconds,
         last_ledger: health.lastLedger,
@@ -104,7 +150,7 @@ export function startApi() {
       if (!dbConnected) {
         return res.status(503).json({ status: "error", db: "disconnected" });
       }
-      res.status(200).json({ status: "ok", db: "connected", latestLedger: health.lastLedger });
+      res.status(200).json({ status: "ok", db: "connected", last_ledger: health.lastLedger });
     })
   );
 
@@ -123,8 +169,38 @@ export function startApi() {
   app.get(
     "/api/functions",
     asyncHandler(async (req, res) => {
+      const now = Date.now();
+      const cacheIsFresh =
+        distinctFunctionsCache !== null && distinctFunctionsCache.expiresAt > now;
+
+      if (cacheIsFresh) {
+        res.setHeader("Cache-Control", "public, max-age=60");
+        return res.json(distinctFunctionsCache.value);
+      }
+
       const result = await db.getDistinctFunctions();
-      res.json(result);
+      distinctFunctionsCache = {
+        value: result,
+        expiresAt: now + 60_000,
+      };
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.json(result);
+    })
+  );
+
+  // GET /api/tokens/:id/metadata — SEP-41 token metadata from simulated calls
+  app.get(
+    "/api/tokens/:id/metadata",
+    asyncHandler(async (req, res) => {
+      let metadata;
+      try {
+        metadata = await fetchTokenMetadata(req.params.id);
+      } catch {
+        return res.status(404).json({ error: "Contract is not SEP-41 compliant" });
+      }
+
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.json({ contract_id: req.params.id, ...metadata });
     })
   );
 
@@ -153,6 +229,28 @@ export function startApi() {
     })
   );
 
+  // GET /api/events/:seq/raw
+  app.get(
+    "/api/events/:seq/raw",
+    asyncHandler(async (req, res) => {
+      const seqStr = String(req.params.seq).trim();
+      const seq = parseInt(seqStr, 10);
+      if (isNaN(seq) || seq < 0 || !/^\d+$/.test(seqStr)) {
+        return res.status(400).json({ error: "seq must be a non-negative integer" });
+      }
+      const ev = await db.getEvent(seq);
+      if (!ev) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      res.json({
+        seq: ev.seq,
+        raw_topics: ev.raw_topics,
+        raw_data: ev.raw_data,
+        tx_hash: ev.tx_hash,
+      });
+    })
+  );
+
   // GET /api/events/stream — Server-Sent Events endpoint for live event feed
   app.get("/api/events/stream", (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
@@ -167,11 +265,34 @@ export function startApi() {
 
     eventEmitter.on("event", onEvent);
 
-    req.on("close", () => {
+    res.on("close", () => {
       eventEmitter.off("event", onEvent);
-      res.end();
     });
   });
+
+  // GET /api/events/:seq/raw — raw un-decoded topics and data for a single event.
+  // Must be registered BEFORE /api/events/:seq so Express doesn't consume "raw"
+  // as the :seq parameter.
+  app.get(
+    "/api/events/:seq/raw",
+    asyncHandler(async (req, res) => {
+      const seqStr = String(req.params.seq).trim();
+      const seq = parseInt(seqStr, 10);
+      if (isNaN(seq) || seq < 0 || !/^\d+$/.test(seqStr)) {
+        return res.status(400).json({ error: "seq must be a non-negative integer" });
+      }
+      const ev = await db.getEvent(seq);
+      if (!ev) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      res.json({
+        seq: ev.seq,
+        raw_topics: ev.raw_topics,
+        raw_data: ev.raw_data,
+        tx_hash: ev.tx_hash,
+      });
+    })
+  );
 
   // GET /api/events/:seq
   app.get(
@@ -190,6 +311,28 @@ export function startApi() {
     })
   );
 
+  // GET /api/events/:seq/raw — return only the raw event payload fields.
+  app.get(
+    "/api/events/:seq/raw",
+    asyncHandler(async (req, res) => {
+      const seqStr = String(req.params.seq).trim();
+      const seq = parseInt(seqStr, 10);
+      if (isNaN(seq) || seq < 0 || !/^\d+$/.test(seqStr)) {
+        return res.status(400).json({ error: "seq must be a non-negative integer" });
+      }
+      const ev = await db.getEvent(seq);
+      if (!ev) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      res.json({
+        seq: ev.seq,
+        raw_topics: ev.raw_topics,
+        raw_data: ev.raw_data,
+        tx_hash: ev.tx_hash,
+      });
+    })
+  );
+
   // GET /api/contracts?q=&page=&limit= — paginated list of registered contracts,
   // optionally filtered by name/description via case-insensitive search.
   app.get(
@@ -198,6 +341,24 @@ export function startApi() {
       const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 25;
       const result = await db.getContracts({ q: req.query.q, page, limit });
+      res.json(result);
+    })
+  );
+
+  // GET /api/contracts/:id/events?fn=&page= — paginated event history for a
+  // registered contract, optionally filtered by function name.
+  app.get(
+    "/api/contracts/:id/events",
+    asyncHandler(async (req, res) => {
+      const meta = await db.getContractMeta(req.params.id);
+      if (!meta) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      const result = await db.getEvents({
+        contract: req.params.id,
+        fn: req.query.fn,
+        page: Number(req.query.page) || 1,
+      });
       res.json(result);
     })
   );
@@ -214,10 +375,16 @@ export function startApi() {
     })
   );
 
-  // POST /api/contracts — register ABI metadata
+  // POST /api/contracts — register contract ABI metadata
   app.post(
     "/api/contracts",
+    requireAdminKey,
     asyncHandler(async (req, res) => {
+      const validationError = validateContractPayload(req.body);
+      if (validationError) {
+        return res.status(400).json({ error: validationError });
+      }
+
       const existing = await db.getContractMeta(req.body.id);
       const registeredBy = req.body.registered_by ?? existing?.registered_by;
 
@@ -232,95 +399,11 @@ export function startApi() {
     })
   );
 
-  // DELETE /api/contracts/:id — remove contract ABI metadata (admin-authenticated)
-  app.delete(
-    "/api/contracts/:id",
-    requireAdminKey,
-    asyncHandler(async (req, res) => {
-      const existing = await db.getContractMeta(req.params.id);
-      if (!existing) {
-        return res.status(404).json({ error: "Not found" });
-      }
-      await db.deleteContractMeta(req.params.id);
-      res.status(204).send();
-    })
-  );
-
-  // GET /api/wallet/:address
-  app.get(
-    "/api/wallet/:address",
-    asyncHandler(async (req, res) => {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 25;
-      const result = await db.getWalletEvents(req.params.address, { page, limit });
-      res.json(result);
-    })
-  );
-
-  // GET /api/tokens/:id/volume — 24-hour rolling transfer volume
-  // Query params:
-  //   decimals (optional, integer) — override the token decimal precision instead of
-  //   fetching it from on-chain metadata / simulation.  Useful when the simulation call
-  //   would add latency or the caller already knows the precision.
-  app.get(
-    "/api/tokens/:id/volume",
-    asyncHandler(async (req, res) => {
-      const contractId = req.params.id;
-
-      // Allow caller to bypass the metadata lookup with an explicit decimals override.
-      let decimals;
-      if (req.query.decimals !== undefined) {
-        const parsed = parseInt(req.query.decimals, 10);
-        if (isNaN(parsed) || parsed < 0 || parsed > 38) {
-          return res.status(400).json({ error: "decimals must be an integer between 0 and 38" });
-        }
-        decimals = parsed;
-      } else {
-        // Fetch decimals from on-chain metadata (cached via contract registry or live sim)
-        decimals = 7;
-        try {
-          const meta = await fetchTokenMetadata(contractId);
-          decimals = meta.decimals;
-        } catch {
-          /* use default */
-        }
-      }
-
-      const volume = await db.get24hVolume(contractId, decimals);
-      res.json({ contract_id: contractId, window: "24h", ...volume });
-    })
-  );
-
-  // GET /api/tokens/:id/metadata — SEP-41 token metadata
-  app.get(
-    "/api/tokens/:id/metadata",
-    asyncHandler(async (req, res) => {
-      const contractId = req.params.id;
-      try {
-        const meta = await fetchTokenMetadata(contractId);
-        res.json({
-          contract_id: contractId,
-          name: meta.name,
-          symbol: meta.symbol,
-          decimals: meta.decimals,
-        });
-      } catch {
-        res.status(404).json({ error: "Token not found or not SEP-41 compliant" });
-      }
-    })
-  );
-
-  app.use((req, res) => {
-    res.status(404).json({ error: "Not found" });
-  });
-
-  app.use(errorHandler);
-
   return app;
 }
 
-export function startApi(port = PORT) {
-  const app = createApp();
-  return app.listen(port, () => console.log(`API listening on :${port}`));
+export function startApi() {
+  return createApp().listen(PORT, () => {
+    console.log(`[api] listening on ${PORT}`);
+  });
 }
-

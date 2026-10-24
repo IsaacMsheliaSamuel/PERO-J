@@ -13,11 +13,9 @@ export default function WalletPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    if (address) {
-      document.title = `Wallet ${address} - Soroban Smart Block Explorer`;
-    } else {
-      document.title = "Wallet History - Soroban Smart Block Explorer";
-    }
+    document.title = address
+      ? `Wallet ${address} - Soroban Smart Block Explorer`
+      : "Wallet History - Soroban Smart Block Explorer";
   }, [address]);
 
   const isValidAddress = StrKey.isValidEd25519PublicKey(address);
@@ -76,7 +74,11 @@ export default function WalletPage() {
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
           <span style={{ padding: "6px 10px", color: "var(--muted)" }}>Page {page}</span>
-          <button disabled={page * limit >= total || events.length < limit} onClick={() => setPage(p => p + 1)}>Next →</button>
+          {/* Disable Next only when all events have been fetched.
+              Checking page * limit >= total (not events.length < limit)
+              avoids prematurely disabling the button when the last page
+              is exactly full (total % limit === 0). */}
+          <button disabled={page * limit >= total} onClick={() => setPage(p => p + 1)}>Next →</button>
         </div>
       )}
     </div>

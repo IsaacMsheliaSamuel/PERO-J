@@ -112,32 +112,9 @@
   color-scheme: dark;
 }
 
-/* ─── Light theme: explicit opt-in (overrides system dark) ───────────────── */
-:root[data-theme="light"] {
-  --bg-primary:    #ffffff;
-  --bg-secondary:  #f6f8fa;
-  --bg-overlay:    rgba(0, 0, 0, 0.45);
+html, body { max-width: 100%; overflow-x: hidden; }
 
-  --surface:       #f6f8fa;
-  --surface-hover: #eaeef2;
-
-  --border-color:  #d0d7de;
-  --border-focus:  #0969da;
-
-  --text-primary:   #24292f;
-  --text-secondary: #57606a;
-  --text-inverse:   #ffffff;
-  --text-on-accent: #ffffff;
-
-  --accent:        #0969da;
-  --accent-hover:  #0860ca;
-
-  --green:         #1a7f37;
-  --green-bg:      #dafbe1;
-  --red:           #cf222e;
-  --red-bg:        #ffebe9;
-  --yellow:        #9a6700;
-  --yellow-bg:     #fff8c5;
+body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; }
 
   --bg:            var(--bg-primary);
   --text:          var(--text-primary);
@@ -564,30 +541,55 @@ button:disabled {
 @media (max-width: 639px) {
   body { font-size: 13px; }
 
-  .app-main {
-    padding: 16px 12px;
-  }
-
-  input, select, textarea {
-    width:     100%;
-    padding:   10px 12px;
-    font-size: 16px; /* prevent iOS auto-zoom */
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
   }
 
   button {
-    min-height: 48px;
-    padding:    0 14px;
-    font-size:  14px;
+    padding: 8px 12px;
+    font-size: 13px;
   }
 
-  .card { padding: 12px; }
+  .card {
+    padding: 12px;
+  }
+}
 
-  /* Single-column table fallback: hide secondary columns */
-  table th:nth-child(1),
-  table td:nth-child(1),
-  table th:nth-child(2),
-  table td:nth-child(2) {
-    display: none;
+/* EventTable: allow horizontal scrolling on small screens instead of overflowing */
+.table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll table {
+  min-width: 640px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Navigation: collapse to a stacked layout on mobile */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .nav a,
+  .nav button {
+    width: 100%;
+    text-align: left;
   }
 
   /* Chips wrap and take full usable width */

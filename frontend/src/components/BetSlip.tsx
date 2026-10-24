@@ -1,288 +1,264 @@
-import React, { useState } from "react";
-import {
-  SLIPPAGE_PRESETS,
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  calculateMinOdds,
-  formatOddsPercentage,
-  formatOddsMultiplier,
-  isHighSlippage,
-} from "../lib/slippage";
+import { useState, useCallback } from "react";
 
-export interface BetSlipProps {
-  marketId: number | string;
-  marketTitle: string;
-  currentOddsBps?: number; // Defaults to 5000 bps (50%)
-  onPlaceBet?: (params: {
-    marketId: number | string;
-    isYes: boolean;
-    amount: number;
-    minAcceptableOdds: number;
-    slippageTolerance: number;
-  }) => void;
+// Protocol fee applied to all parimutuel payouts
+const PROTOCOL_FEE = 0.02; // 2%
+
+interface BetSlipProps {
+  /** Current amount already in the pool (excluding this bet) */
+  poolSize?: number;
+  /** Total prize pool used in payout calculation */
+  totalPool?: number;
+  /** Market/outcome label displayed in the header */
+  marketLabel?: string;
+  /** Called when the user confirms the bet */
+  onPlaceBet?: (stake: number) => void;
+}
+
+/**
+ * Calculates the estimated payout using the parimutuel formula:
+ *   payout = (stake / (pool + stake)) * totalPool * (1 - fee)
+ */
+function calcPayout(stake: number, pool: number, totalPool: number): number {
+  if (stake <= 0 || pool + stake === 0) return 0;
+  return (stake / (pool + stake)) * totalPool * (1 - PROTOCOL_FEE);
 }
 
 export default function BetSlip({
-  marketId,
-  marketTitle,
-  currentOddsBps = 5000,
+  poolSize = 1000,
+  totalPool = 5000,
+  marketLabel = "Outcome",
   onPlaceBet,
 }: BetSlipProps) {
-  const [isYes, setIsYes] = useState<boolean>(true);
-  const [amount, setAmount] = useState<string>("10");
-  const [slippage, setSlippage] = useState<number>(DEFAULT_SLIPPAGE_TOLERANCE);
-  const [customSlippage, setCustomSlippage] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [stake, setStake] = useState<string>("10");
+  const [isOpen, setIsOpen] = useState(false);
+  const [placed, setPlaced] = useState(false);
 
-  const activeSlippage = customSlippage !== "" ? parseFloat(customSlippage) || 0 : slippage;
-  const minAcceptableOdds = calculateMinOdds(currentOddsBps, activeSlippage);
-  const showWarning = isHighSlippage(activeSlippage);
+  const stakeNum = parseFloat(stake) || 0;
+  const payout = calcPayout(stakeNum, poolSize, totalPool);
+  const profit = payout - stakeNum;
+  const multiplier = stakeNum > 0 ? payout / stakeNum : 0;
+  const roi = stakeNum > 0 ? (profit / stakeNum) * 100 : 0;
+  const feeAmount = stakeNum > 0 ? (stakeNum / (poolSize + stakeNum)) * totalPool * PROTOCOL_FEE : 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
+  const isValid = stakeNum > 0 && stakeNum <= 100_000;
 
-    const numericAmount = parseFloat(amount);
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      setErrorMessage("Please enter a valid bet amount greater than 0");
-      return;
+  const handleStakeChange = useCallback((value: string) => {
+    // Allow only numeric input with up to 2 decimal places
+    if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
+      setStake(value);
+      setPlaced(false);
     }
+  }, []);
 
-    if (activeSlippage < 0 || activeSlippage > 50) {
-      setErrorMessage("Slippage tolerance must be between 0% and 50%");
-      return;
-    }
+  const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setStake(e.target.value);
+    setPlaced(false);
+  }, []);
 
-    setIsSubmitting(true);
-    try {
-      onPlaceBet?.({
-        marketId,
-        isYes,
-        amount: numericAmount,
-        minAcceptableOdds,
-        slippageTolerance: activeSlippage,
-      });
-    } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to place bet");
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handlePlaceBet = () => {
+    if (!isValid) return;
+    onPlaceBet?.(stakeNum);
+    setPlaced(true);
   };
 
+  // ── Mobile: rendered as a bottom drawer ──────────────────────────────────
   return (
-    <div
-      role="region"
-      aria-label="Betting Slip with Slippage Protection"
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: "8px",
-        padding: "16px",
-        backgroundColor: "var(--bg-surface, #ffffff)",
-        maxWidth: "420px",
-      }}
-    >
-      <div style={{ marginBottom: "12px" }}>
-        <span style={{ fontSize: "12px", color: "var(--muted)", textTransform: "uppercase" }}>
-          Bet Slip
-        </span>
-        <h4 style={{ margin: "4px 0 8px 0", fontSize: "15px" }}>{marketTitle}</h4>
-      </div>
+    <>
+      {/* Mobile trigger button — visible only on small screens */}
+      <button
+        type="button"
+        className="bet-slip-trigger"
+        onClick={() => setIsOpen(true)}
+        aria-label="Open betting slip"
+        aria-expanded={isOpen}
+      >
+        🎯 Place Bet
+      </button>
 
-      <form onSubmit={handleSubmit}>
-        {/* Outcome Selector */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+      {/* Overlay backdrop for mobile drawer */}
+      {isOpen && (
+        <div
+          className="bet-slip-backdrop"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Bet slip panel — sidebar on desktop, bottom drawer on mobile */}
+      <aside
+        className={`bet-slip${isOpen ? " bet-slip--open" : ""}`}
+        aria-label="Betting slip"
+      >
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div className="bet-slip__header">
+          <h3 className="bet-slip__title">Bet Slip</h3>
           <button
             type="button"
-            aria-pressed={isYes}
-            onClick={() => setIsYes(true)}
-            style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: "6px",
-              fontWeight: 600,
-              backgroundColor: isYes ? "#10b981" : "var(--bg-secondary, #f3f4f6)",
-              color: isYes ? "#ffffff" : "inherit",
-              border: "1px solid var(--border)",
-              cursor: "pointer",
-            }}
+            className="bet-slip__close"
+            onClick={() => setIsOpen(false)}
+            aria-label="Close betting slip"
           >
-            YES ({formatOddsPercentage(currentOddsBps)})
-          </button>
-          <button
-            type="button"
-            aria-pressed={!isYes}
-            onClick={() => setIsYes(false)}
-            style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: "6px",
-              fontWeight: 600,
-              backgroundColor: !isYes ? "#ef4444" : "var(--bg-secondary, #f3f4f6)",
-              color: !isYes ? "#ffffff" : "inherit",
-              border: "1px solid var(--border)",
-              cursor: "pointer",
-            }}
-          >
-            NO ({formatOddsPercentage(10000 - currentOddsBps)})
+            ✕
           </button>
         </div>
 
-        {/* Bet Amount */}
-        <div style={{ marginBottom: "14px" }}>
-          <label
-            htmlFor="bet-amount-input"
-            style={{ display: "block", fontSize: "13px", fontWeight: 500, marginBottom: "4px" }}
-          >
-            Bet Amount (XLM)
+        {/* ── Market label ───────────────────────────────────────────── */}
+        <div className="bet-slip__market">
+          <span className="badge">{marketLabel}</span>
+        </div>
+
+        {/* ── Stake input ────────────────────────────────────────────── */}
+        <div className="bet-slip__section">
+          <label htmlFor="bet-stake" className="bet-slip__label">
+            Stake (XLM)
           </label>
           <input
-            id="bet-amount-input"
+            id="bet-stake"
             type="number"
-            min="1"
-            step="any"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: "6px",
-              border: "1px solid var(--border)",
-              boxSizing: "border-box",
-            }}
+            min="0.01"
+            max="100000"
+            step="0.01"
+            value={stake}
+            onChange={(e) => handleStakeChange(e.target.value)}
+            placeholder="Enter stake amount"
+            className="bet-slip__input"
+            aria-describedby="bet-stake-hint"
           />
+          <span id="bet-stake-hint" className="bet-slip__hint">
+            Min: 0.01 XLM · Max: 100,000 XLM
+          </span>
         </div>
 
-        {/* Slippage Tolerance Controls */}
-        <div style={{ marginBottom: "14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 500 }}>Slippage Tolerance</span>
-            <span style={{ fontSize: "12px", color: "var(--muted)" }}>
-              {activeSlippage.toFixed(1)}%
-            </span>
+        {/* ── Slider ─────────────────────────────────────────────────── */}
+        <div className="bet-slip__section">
+          <label htmlFor="bet-slider" className="bet-slip__label">
+            Quick select
+          </label>
+          <input
+            id="bet-slider"
+            type="range"
+            min="1"
+            max="1000"
+            step="1"
+            value={Math.min(stakeNum, 1000)}
+            onChange={handleSliderChange}
+            className="bet-slip__slider"
+            aria-label="Stake amount slider"
+          />
+          <div className="bet-slip__slider-labels">
+            <span>1</span>
+            <span>250</span>
+            <span>500</span>
+            <span>750</span>
+            <span>1,000</span>
           </div>
+        </div>
 
-          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-            {SLIPPAGE_PRESETS.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                aria-pressed={customSlippage === "" && slippage === preset}
-                onClick={() => {
-                  setSlippage(preset);
-                  setCustomSlippage("");
-                }}
-                style={{
-                  flex: 1,
-                  padding: "6px 8px",
-                  fontSize: "12px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--border)",
-                  cursor: "pointer",
-                  backgroundColor:
-                    customSlippage === "" && slippage === preset
-                      ? "var(--primary, #3b82f6)"
-                      : "transparent",
-                  color: customSlippage === "" && slippage === preset ? "#ffffff" : "inherit",
-                }}
-              >
-                {preset}%
-              </button>
-            ))}
-
-            <input
-              type="number"
-              placeholder="Custom"
-              aria-label="Custom slippage percentage"
-              min="0.1"
-              max="50"
-              step="0.1"
-              value={customSlippage}
-              onChange={(e) => setCustomSlippage(e.target.value)}
-              style={{
-                width: "72px",
-                padding: "6px 8px",
-                fontSize: "12px",
-                borderRadius: "4px",
-                border: "1px solid var(--border)",
-                textAlign: "right",
-              }}
-            />
-            <span style={{ fontSize: "12px", color: "var(--muted)" }}>%</span>
-          </div>
-
-          {showWarning && (
-            <div
-              role="alert"
-              style={{
-                marginTop: "6px",
-                padding: "6px 8px",
-                fontSize: "11px",
-                borderRadius: "4px",
-                backgroundColor: "#fef3c7",
-                color: "#92400e",
-              }}
+        {/* ── Quick-select chips ─────────────────────────────────────── */}
+        <div className="bet-slip__chips" role="group" aria-label="Quick stake amounts">
+          {[10, 25, 50, 100, 250].map((amount) => (
+            <button
+              key={amount}
+              type="button"
+              className={`bet-slip__chip${stakeNum === amount ? " bet-slip__chip--active" : ""}`}
+              onClick={() => { setStake(String(amount)); setPlaced(false); }}
+              aria-pressed={stakeNum === amount}
             >
-              ⚠️ High slippage tolerance increases risk of sandwich attacks.
-            </div>
-          )}
+              {amount}
+            </button>
+          ))}
         </div>
 
-        {/* Protection Summary */}
-        <div
-          style={{
-            padding: "8px 12px",
-            borderRadius: "6px",
-            backgroundColor: "var(--bg-secondary, #f8fafc)",
-            fontSize: "12px",
-            marginBottom: "14px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-            <span style={{ color: "var(--muted)" }}>Current Odds:</span>
-            <span>
-              {formatOddsPercentage(currentOddsBps)} ({formatOddsMultiplier(currentOddsBps)})
+        {/* ── Payout breakdown ───────────────────────────────────────── */}
+        <div className="bet-slip__breakdown" aria-live="polite" aria-label="Payout breakdown">
+          <div className="bet-slip__row">
+            <span className="bet-slip__row-label">Pool size</span>
+            <span className="bet-slip__row-value">
+              {poolSize.toLocaleString()} XLM
             </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
-            <span>Min. Acceptable Odds:</span>
-            <span>{formatOddsPercentage(minAcceptableOdds)}</span>
+          <div className="bet-slip__row">
+            <span className="bet-slip__row-label">Your share</span>
+            <span className="bet-slip__row-value">
+              {stakeNum > 0
+                ? ((stakeNum / (poolSize + stakeNum)) * 100).toFixed(2) + "%"
+                : "—"}
+            </span>
+          </div>
+          <div className="bet-slip__row">
+            <span className="bet-slip__row-label">Protocol fee (2%)</span>
+            <span className="bet-slip__row-value bet-slip__row-value--muted">
+              {feeAmount > 0 ? `−${feeAmount.toFixed(4)} XLM` : "—"}
+            </span>
+          </div>
+
+          <div className="bet-slip__divider" />
+
+          <div className="bet-slip__row bet-slip__row--highlight">
+            <span className="bet-slip__row-label">Estimated payout</span>
+            <span className="bet-slip__row-value bet-slip__row-value--accent">
+              {payout > 0 ? `${payout.toFixed(4)} XLM` : "—"}
+            </span>
+          </div>
+          <div className="bet-slip__row">
+            <span className="bet-slip__row-label">Net profit</span>
+            <span
+              className={`bet-slip__row-value${
+                profit > 0
+                  ? " bet-slip__row-value--green"
+                  : profit < 0
+                  ? " bet-slip__row-value--red"
+                  : ""
+              }`}
+            >
+              {profit !== 0
+                ? `${profit >= 0 ? "+" : ""}${profit.toFixed(4)} XLM`
+                : "—"}
+            </span>
+          </div>
+          <div className="bet-slip__row">
+            <span className="bet-slip__row-label">Multiplier</span>
+            <span className="bet-slip__row-value">
+              {multiplier > 0 ? `${multiplier.toFixed(2)}×` : "—"}
+            </span>
+          </div>
+          <div className="bet-slip__row">
+            <span className="bet-slip__row-label">ROI</span>
+            <span
+              className={`bet-slip__row-value${
+                roi > 0
+                  ? " bet-slip__row-value--green"
+                  : roi < 0
+                  ? " bet-slip__row-value--red"
+                  : ""
+              }`}
+            >
+              {roi !== 0 ? `${roi >= 0 ? "+" : ""}${roi.toFixed(2)}%` : "—"}
+            </span>
           </div>
         </div>
 
-        {errorMessage && (
-          <div
-            role="alert"
-            style={{
-              marginBottom: "10px",
-              padding: "6px 8px",
-              fontSize: "12px",
-              borderRadius: "4px",
-              backgroundColor: "#fee2e2",
-              color: "#b91c1c",
-            }}
-          >
-            {errorMessage}
-          </div>
-        )}
-
+        {/* ── Place bet button ───────────────────────────────────────── */}
         <button
-          type="submit"
-          disabled={isSubmitting}
-          style={{
-            width: "100%",
-            padding: "10px",
-            borderRadius: "6px",
-            fontWeight: 600,
-            backgroundColor: "var(--primary, #3b82f6)",
-            color: "#ffffff",
-            border: "none",
-            cursor: isSubmitting ? "not-allowed" : "pointer",
-            opacity: isSubmitting ? 0.7 : 1,
-          }}
+          type="button"
+          className="bet-slip__cta"
+          disabled={!isValid || placed}
+          onClick={handlePlaceBet}
+          aria-disabled={!isValid || placed}
         >
-          {isSubmitting ? "Submitting Bet…" : "Place Protected Bet"}
+          {placed
+            ? "✓ Bet Placed!"
+            : isValid
+            ? `Place Bet — ${stakeNum.toLocaleString()} XLM`
+            : "Enter a valid stake"}
         </button>
-      </form>
-    </div>
+
+        {placed && (
+          <p className="bet-slip__confirm" role="status">
+            Your bet of {stakeNum.toLocaleString()} XLM has been submitted.
+          </p>
+        )}
+      </aside>
+    </>
   );
 }

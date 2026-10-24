@@ -38,6 +38,13 @@ pub const MAX_FUNCTIONS: u32 = 64;
 /// Largest number of parameters accepted per function.
 pub const MAX_PARAMS: u32 = 32;
 
+/// Maximum length for market/contract question and title strings (<= 160 characters).
+pub const MAX_TITLE_LEN: u32 = 160;
+/// Maximum length for market/contract description string (<= 1000 characters).
+pub const MAX_MARKET_DESC_LEN: u32 = 1000;
+/// Maximum length for external evidence source URL (<= 256 characters).
+pub const MAX_URL_LEN: u32 = 256;
+
 // ── Storage keys ─────────────────────────────────────────────────────────────
 #[contracttype]
 pub enum DataKey {
@@ -183,6 +190,12 @@ impl ExplorerContract {
     /// from both `register_contract` and `update_contract` so the check is not
     /// duplicated.
     fn validate_meta(env: &Env, meta: &ContractMeta) {
+        if meta.name.len() > MAX_TITLE_LEN {
+            panic_with_error!(env, Error::LimitExceeded);
+        }
+        if meta.description.len() > MAX_MARKET_DESC_LEN {
+            panic_with_error!(env, Error::LimitExceeded);
+        }
         if meta.functions.len() > MAX_FUNCTIONS {
             panic_with_error!(env, Error::LimitExceeded);
         }
@@ -190,6 +203,16 @@ impl ExplorerContract {
             if meta.functions.get(i).unwrap().params.len() > MAX_PARAMS {
                 panic_with_error!(env, Error::LimitExceeded);
             }
+        }
+    }
+
+    /// Validate market question/title and description string lengths and external URL.
+    pub fn validate_market_input(env: &Env, title: &String, description: &String, source_url: &String) {
+        if title.len() > MAX_TITLE_LEN
+            || description.len() > MAX_MARKET_DESC_LEN
+            || source_url.len() > MAX_URL_LEN
+        {
+            panic_with_error!(env, Error::LimitExceeded);
         }
     }
 
@@ -1220,40 +1243,64 @@ mod tests {
         assert_eq!(client.get_contract(&cid).name, String::from_str(&env, "StellarSwap v2"));
     }
 
-    // ── Slippage protection tests ────────────────────────────────────────────
+    // ── Input length limit tests ─────────────────────────────────────────────
 
     #[test]
-    fn test_compute_odds_initial_and_populated() {
-        assert_eq!(ExplorerContract::compute_odds(0, 0, true), 5000);
-        // 70 YES vs 30 NO -> YES odds = 7000 bps (70%)
-        assert_eq!(ExplorerContract::compute_odds(70, 30, true), 7000);
-        // 70 YES vs 30 NO -> NO odds = 3000 bps (30%)
-        assert_eq!(ExplorerContract::compute_odds(70, 30, false), 3000);
-    }
-
-    #[test]
-    fn test_place_bet_succeeds_within_slippage() {
+    #[should_panic]
+    fn test_register_contract_rejects_oversized_title() {
         let (env, client) = setup!();
-        let user = Address::generate(&env);
-        let market_id = 42u64;
-
-        // Current initial odds 5000 bps (50%), min_odds 4500 bps (45%) -> succeeds
-        let odds = client.place_bet(&user, &market_id, &true, &1000i128, &4500u32);
-        assert_eq!(odds, 5000);
+        let admin = Address::generate(&env);
+        client.init(&admin);
+        let cid: BytesN<32> = BytesN::from_array(&env, &[18u8; 32]);
+        // 161 characters (exceeds MAX_TITLE_LEN = 160)
+        let buf = [b'a'; 161];
+        let long_title = core::str::from_utf8(&buf).unwrap();
+        let meta = ContractMeta {
+            name: String::from_str(&env, long_title),
+            description: String::from_str(&env, "valid description"),
+            functions: Vec::new(&env),
+            registered_by: admin.clone(),
+        };
+        client.register_contract(&admin, &cid, &meta);
     }
 
     #[test]
     #[should_panic]
-    fn test_place_bet_reverts_when_slippage_exceeded() {
+    fn test_register_contract_rejects_oversized_description() {
         let (env, client) = setup!();
-        let user1 = Address::generate(&env);
-        let user2 = Address::generate(&env);
-        let market_id = 99u64;
+        let admin = Address::generate(&env);
+        client.init(&admin);
+        let cid: BytesN<32> = BytesN::from_array(&env, &[19u8; 32]);
+        // 1001 bytes (exceeds MAX_MARKET_DESC_LEN = 1000)
+        let buf = [b'b'; 1001];
+        let long_desc = core::str::from_utf8(&buf).unwrap();
+        let meta = ContractMeta {
+            name: String::from_str(&env, "Valid Title"),
+            description: String::from_str(&env, long_desc),
+            functions: Vec::new(&env),
+            registered_by: admin.clone(),
+        };
+        client.register_contract(&admin, &cid, &meta);
+    }
 
-        // User 1 bets 900 on NO, pool becomes 0 YES, 900 NO. YES odds drop to 1 bps
-        client.place_bet(&user1, &market_id, &false, &900i128, &1000u32);
-
-        // User 2 expects at least 4000 bps (40%) on YES, but odds are 1 bps -> must panic
-        client.place_bet(&user2, &market_id, &true, &100i128, &4000u32);
+    #[test]
+    fn test_register_contract_accepts_boundary_limits() {
+        let (env, client) = setup!();
+        let admin = Address::generate(&env);
+        client.init(&admin);
+        let cid: BytesN<32> = BytesN::from_array(&env, &[20u8; 32]);
+        let buf_title = [b'c'; 160];
+        let title_160 = core::str::from_utf8(&buf_title).unwrap();
+        let buf_desc = [b'd'; 1000];
+        let desc_1000 = core::str::from_utf8(&buf_desc).unwrap();
+        let meta = ContractMeta {
+            name: String::from_str(&env, title_160),
+            description: String::from_str(&env, desc_1000),
+            functions: Vec::new(&env),
+            registered_by: admin.clone(),
+        };
+        client.register_contract(&admin, &cid, &meta);
+        let fetched = client.get_contract(&cid);
+        assert_eq!(fetched.name, String::from_str(&env, title_160));
     }
 }

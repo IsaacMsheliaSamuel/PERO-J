@@ -8,6 +8,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Bug Fixes
 
+- [#1010](../../issues/1010) ci: add PostgreSQL and Redis service containers for automated ([`8a75968`](../../commit/8a75968f5bab518935890dd1dd367f3b1f7df5f8))
+
+Closes [#1010](../../issues/1010)
+
+
+- [#1009](../../issues/1009) ci: expand GitHub Actions workflow matrix to test backend, in ([`088f040`](../../commit/088f040d4f953ac8450e88a1d2247f50017aa77b))
+
+Closes [#1009](../../issues/1009)
+
+
+- [#1008](../../issues/1008) fix(frontend): audit accessibility (a11y) landmarks, ARIA lab ([`6b04971`](../../commit/6b04971133b54b3cf253fa8fcf6172b57e26fcf3))
+
+Closes [#1008](../../issues/1008)
+
+
+- [#1006](../../issues/1006) perf(frontend): dynamic import heavy chart libraries to reduc ([`a8df3b3`](../../commit/a8df3b3f16df6ed735e8942904850cf42f6f890e))
+
+Closes [#1006](../../issues/1006)
+
+
 - [#747](../../issues/747) `get_events()` must cap `limit` to prevent CPU exhaustion ([`58139bf`](../../commit/58139bfb29c0e0cddc1af6f34af9566a4ccb5a11))
 
 Closes [#747](../../issues/747)
@@ -960,6 +980,18 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`6a8952c`](../../commit/6a8952c6bf5aee832e479db4196c17bbecf761ee))
+
+- Auto-update CHANGELOG.md [skip ci] ([`21be3f2`](../../commit/21be3f2cf122fce3727ef37e97ef4096d4e40ebf))
+
+- Auto-update CHANGELOG.md [skip ci] ([`6eb65ed`](../../commit/6eb65edc51a6743dcfdd2b9e83fc19c919ca8468))
+
+- Auto-update CHANGELOG.md [skip ci] ([`023c511`](../../commit/023c51174b12f2720c40c8da1b9db19d4a47a0f7))
+
+- Auto-update CHANGELOG.md [skip ci] ([`f76dd57`](../../commit/f76dd5753d61f8ac857dcea37391aed37cdef53e))
+
+- Auto-update CHANGELOG.md [skip ci] ([`56295de`](../../commit/56295de01c5a70d247292ac42c446b96a1c46d4c))
+
 - Auto-update CHANGELOG.md [skip ci] ([`df45aa3`](../../commit/df45aa3ccd5217cd703bbc30fb6148424a37feea))
 
 - Auto-update CHANGELOG.md [skip ci] ([`dbc88a1`](../../commit/dbc88a16b9a22db110cef890e8ff377aa262f53c))
@@ -1287,6 +1319,27 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Features
 
+- Network status chip and contract error toasts ([#999](../../issues/999), [#1001](../../issues/1001)) ([`5dac915`](../../commit/5dac9159607ea77ad3617f421f0225ab5074d87e))
+
+Issue [#999](../../issues/999) - Network and connection status indicator:
+  - Add useNetworkStatus hook tracking navigator.onLine + SSE health
+  - Add NetworkStatusChip component (Live/Reconnecting.../Offline) with
+    colored animated dots rendered in the Nav header
+  - Tests: 3 cases covering live, offline, reconnecting states
+
+  Issue [#1001](../../issues/1001) - Map Soroban contract error codes 21-28 to friendly toasts:
+  - Add frontend/src/lib/contract-errors.ts mapping codes 21-28 to
+    human-readable messages and actionable resolution advice
+  - Add ToastProvider/useToast in Toast.tsx for in-app notifications
+  - Add useContractError hook that catches known contract errors and
+    fires a toast; re-throws unknown errors
+  - Wrap app root with ToastProvider in main.tsx
+  - Tests: 7 cases covering all codes, unknown codes, both parse formats
+
+  Closes [#999](../../issues/999)
+  Closes [#1001](../../issues/1001)
+
+
 - Configure database pool size ([`df7e5bb`](../../commit/df7e5bbd7b70c022f583f715bd716993b77d7f55))
 
 - Add SEP-41 token metadata endpoint ([#816](../../issues/816)) ([`77ee7d8`](../../commit/77ee7d8bd455a71a0235b348d35bef8f197496fb))
@@ -1363,6 +1416,39 @@ Add a dedicated buildDescription case for the SEP-41 approve function so
   function call.
 
   Closes [#402](../../issues/402), [#404](../../issues/404), [#397](../../issues/397), [#403](../../issues/403)
+
+
+- Interactive BetSlip ROI calculator, mobile responsive layout, referral link generator, dark/light theme toggle ([`70a5311`](../../commit/70a5311625e2bab534ea275ba51bd64aa0ad3192))
+
+[#1005](../../issues/1005) - Add BetSlip.tsx with real-time parimutuel payout calculator:
+    - Formula: payout = (stake / (pool + stake)) * totalPool * 0.98
+    - Displays multiplier, net profit, ROI, and 2% protocol fee breakdown
+    - Stake input + range slider + quick-select chips
+    - aria-live payout breakdown updates in real time
+
+  [#1007](../../issues/1007) - Mobile responsive layout improvements:
+    - BetSlip renders as a fixed bottom-sheet drawer on viewports < 640px
+    - All interactive touch targets >= 48px (buttons, inputs, chips)
+    - Single-column layout on mobile; secondary table columns hidden
+    - CSS transform-based slide-up animation for smooth drawer open
+
+  [#1003](../../issues/1003) - Referral link generator at /referrals:
+    - Generates unique referral URL from Stellar wallet address
+    - One-click copy-to-clipboard with fallback for older browsers
+    - One-click social share: X (Twitter), Telegram, WhatsApp
+    - Pre-populated marketing copy in share URLs
+    - Dynamic OpenGraph + Twitter Card meta tags updated client-side
+    - Full og:image, og:title, og:description, twitter:card tags in index.html
+
+  [#1004](../../issues/1004) - Dark/light theme toggle:
+    - Full CSS custom property audit: --bg-primary, --bg-secondary,
+      --text-primary, --text-secondary, --border-color, --accent, etc.
+    - Explicit :root[data-theme='dark'] and :root[data-theme='light'] blocks
+    - System prefers-color-scheme sync via MediaQueryList listener
+    - localStorage persistence; system preference respected when no override
+    - Theme toggle button in Nav with accessible aria-label and emoji icons
+
+  Also fix pre-existing Home.tsx TypeScript errors (useCustom, activeFn undefined)
 
 
 - Add dedicated expand button for long descriptions in EventTable ([`1a14bf3`](../../commit/1a14bf3abef7b40285eac0201fe2eeb8ff9d55ac))
@@ -1676,6 +1762,15 @@ Add a tests/integration/ directory with stub tests that document the
 ### Indexer
 
 - Treat 'function not found' as missing in validateSep41 ([`8c3d338`](../../commit/8c3d338dafb16a53a8035b1db346a5ea28bc3723))
+
+
+### Security
+
+- Add input sanitization and length limits on market fields ([#1031](../../issues/1031)) ([`2e08a8a`](../../commit/2e08a8a0490b6f195126cac09f532324cd2e9226))
+
+- Conduct formal invariant audit for contract balance vs betting pool and fees ([#1029](../../issues/1029)) ([`9fa74ba`](../../commit/9fa74ba8e5deaf5a707e5604fc91422f18096579))
+
+- Implement CORS and security headers policy (CSP, HSTS, X-Frame-Options) ([#1032](../../issues/1032)) ([`62bdf45`](../../commit/62bdf450f99204761e6218b770a647f4c488c8d1))
 
 
 

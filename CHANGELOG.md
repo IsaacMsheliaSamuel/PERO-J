@@ -980,6 +980,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`b45c611`](../../commit/b45c6111c8e3f46bd1c1237e443a98654f9e5198))
+
 - Auto-update CHANGELOG.md [skip ci] ([`e71c08a`](../../commit/e71c08aea5b61f0b172f76fce66605f53a17dfcd))
 
 - Auto-update CHANGELOG.md [skip ci] ([`c7d4497`](../../commit/c7d4497bba68ac719ac432e88b604cccc0c0f484))
@@ -1328,6 +1330,21 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 
 ### Features
+
+- Wire oracle_submission and dispute event handlers into live event loop ([#932](../../issues/932)) ([`4b9ece9`](../../commit/4b9ece977f0fbd779fc100da5202090f03cd6451))
+
+- Add database migration for oracle_submissions, oracle_disputes, and markets tables
+  - Create oracle_submission handler to track submissions and update market state
+  - Create oracle_dispute handler to record challenges and disputes
+  - Create oracle_finalized handler to finalize oracle outcomes
+  - Wire handlers into indexer event loop with automatic routing
+  - Add invalidateMarketCache function for future Redis integration
+  - Add human-readable descriptions for oracle events in decoder
+  - Database state updates within 5 seconds of ledger confirmation
+  - Challenge events trigger dispute tracking records as required
+
+  Resolves [#932](../../issues/932)
+
 
 - Automated DB backup with S3+PITR and contract upgrade playbook ([`f06cc54`](../../commit/f06cc54b3c99a532cc887300991fc47afc38064a))
 

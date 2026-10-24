@@ -980,6 +980,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`e71c08a`](../../commit/e71c08aea5b61f0b172f76fce66605f53a17dfcd))
+
 - Auto-update CHANGELOG.md [skip ci] ([`c7d4497`](../../commit/c7d4497bba68ac719ac432e88b604cccc0c0f484))
 
 - Auto-update CHANGELOG.md [skip ci] ([`fb86f46`](../../commit/fb86f4607288eb7143209c9283c75ff5a53719dc))
@@ -1436,6 +1438,21 @@ Bring up the full PERO-J stack with a single `docker compose up --build`,
   API with hot-reload, and the frontend dev server with hot-reload, plus a
   one-shot seed service that pre-seeds test markets and simulated user
   accounts.
+
+
+- Optimized multi-stage production Dockerfiles for the backend ([`bf3465a`](../../commit/bf3465a77285e6e96ad0194e2e12fb8d610f64c3))
+
+Add a minimal, non-root production Docker image for the PERO-J backend
+  (indexer/API), addressing issue [#1015](../../issues/1015).
+
+  The PERO-J backend is a single Node.js service that serves the REST API,
+  polls Soroban RPC, and optionally submits decoded events on-chain (the
+  "oracle" role). One production image therefore covers the API, indexer, and
+  oracle roles — there are no separate API/oracle services to build distinct
+  images for, so separate Dockerfile.api/Dockerfile.oracle would be redundant
+  for non-existent services. The indexer is plain JavaScript run directly with
+  `node` (no TypeScript compile step), so the multi-stage build installs
+  production dependencies and copies only the runtime code.
 
 
 - Configure database pool size ([`df7e5bb`](../../commit/df7e5bbd7b70c022f583f715bd716993b77d7f55))

@@ -980,6 +980,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`04e03a1`](../../commit/04e03a1546f6295afacb20cfd1dd7098b25abc9c))
+
 - Auto-update CHANGELOG.md [skip ci] ([`4b07303`](../../commit/4b073032ea87f41c79bac0821473513962ec68e1))
 
 - Auto-update CHANGELOG.md [skip ci] ([`6a8952c`](../../commit/6a8952c6bf5aee832e479db4196c17bbecf761ee))
@@ -1320,6 +1322,37 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 
 ### Features
+
+- Automated DB backup with S3+PITR and contract upgrade playbook ([`f06cc54`](../../commit/f06cc54b3c99a532cc887300991fc47afc38064a))
+
+Closes [#1018](../../issues/1018), closes [#1019](../../issues/1019)
+
+  ## Issue [#1018](../../issues/1018) — Automated database backup and PITR
+
+  - scripts/backup.sh: add optional S3 upload with SSE-KMS encryption and
+    STANDARD_IA storage class; add post-upload object verification; add WAL
+    archiving guidance in header comments
+  - scripts/backup-restore-test.sh (new): auto-finds newest local dump,
+    restores into a temporary database, verifies events and contracts table
+    row counts, drops the test DB on exit; documents RPO ≤ 24h / ≤ 5min
+    (WAL) and RTO ≤ 1h targets
+  - docs/backup.md: rewrite as full PITR guide covering WAL archiving setup,
+    postgresql.conf settings, archive_timeout, pg_stat_archiver verification,
+    PITR restore procedure, S3 IAM policy, restore-test cron job, and
+    cloud-provider backup comparison table
+  - .env.example: add BACKUP_S3_BUCKET, BACKUP_S3_PREFIX, BACKUP_S3_REGION
+    vars with inline documentation
+  - Makefile: add backup, backup-upload, backup-restore targets; update help
+
+  ## Issue [#1019](../../issues/1019) — Contract upgrade playbook
+
+  - docs/CONTRACT_UPGRADE_PLAYBOOK.md (new): step-by-step playbook covering
+    pre-upgrade checklist, clean WASM build and SHA-256 hash recording,
+    Testnet deploy + e2e migration tests, byte-for-byte hash identity
+    verification, mainnet multi-sig upgrade transaction, post-upgrade canary
+    smoke test, rollback procedure (re-deploy previous WASM), abort
+    contingency table, RPO/RTO and storage-migration notes
+
 
 - Network status chip and contract error toasts ([#999](../../issues/999), [#1001](../../issues/1001)) ([`5dac915`](../../commit/5dac9159607ea77ad3617f421f0225ab5074d87e))
 

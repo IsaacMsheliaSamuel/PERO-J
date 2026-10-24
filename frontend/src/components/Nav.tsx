@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import NetworkStatusChip from "./NetworkStatusChip";
 
 export default function Nav() {
   const [q, setQ] = useState("");
@@ -90,13 +91,8 @@ export default function Nav() {
             />
             <button type="submit">Search</button>
           </form>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            aria-pressed={theme === "dark"}
-            className="nav-theme"
-          >
+          <NetworkStatusChip sseUrl="/api/events/stream" />
+          <button type="button" onClick={toggleTheme} aria-label="Toggle dark mode" className="nav-theme">
             {theme === "dark" ? "Light" : "Dark"}
           </button>
         </nav>

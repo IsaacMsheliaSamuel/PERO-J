@@ -980,6 +980,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`fb86f46`](../../commit/fb86f4607288eb7143209c9283c75ff5a53719dc))
+
 - Auto-update CHANGELOG.md [skip ci] ([`04e03a1`](../../commit/04e03a1546f6295afacb20cfd1dd7098b25abc9c))
 
 - Auto-update CHANGELOG.md [skip ci] ([`4b07303`](../../commit/4b073032ea87f41c79bac0821473513962ec68e1))
@@ -1406,6 +1408,22 @@ Issue [#999](../../issues/999) - Network and connection status indicator:
     - Theme toggle button in Nav with accessible aria-label and emoji icons
 
   Also fix pre-existing Home.tsx TypeScript errors (useCustom, activeFn undefined)
+
+
+- Optimistic UI updates for bet submission ([#998](../../issues/998)) ([`67036e1`](../../commit/67036e13694756cf523bd944bb3f46178d28b140))
+
+- Add Freighter wallet connect plus place_bet build/sign/submit pipeline
+  - Render the optimistic bet in wallet history and the bet slip immediately
+    after the wallet signature is confirmed
+  - Show a pending spinner on the odds preview and block double-submits while
+    a bet is in flight
+  - Reconcile optimistic state via the indexer SSE stream and RPC
+    getTransaction polling; drop the local row once the indexed event lands
+  - Roll back the optimistic row with an error toast when the transaction is
+    rejected, fails on-chain, or times out
+  - Restore the router App shell clobbered on main (missing App.css import)
+    and fix pre-existing tsc errors (ContractsPage event_count, api.test.ts
+    abort signal) so the branch typechecks clean
 
 
 - Configure database pool size ([`df7e5bb`](../../commit/df7e5bbd7b70c022f583f715bd716993b77d7f55))

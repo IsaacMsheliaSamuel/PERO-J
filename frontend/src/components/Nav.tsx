@@ -2,6 +2,26 @@ import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import NetworkStatusChip from "./NetworkStatusChip";
 
+/**
+ * Reads the stored or system theme preference.
+ * Priority: localStorage → system prefers-color-scheme → "light"
+ */
+function getInitialTheme(): "light" | "dark" {
+  if (typeof window === "undefined") return "light";
+  const stored = localStorage.getItem("theme") as "light" | "dark" | null;
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+/**
+ * Applies the theme to the document root and persists to localStorage.
+ */
+function applyTheme(theme: "light" | "dark") {
+  const root = document.documentElement;
+  root.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
+}
+
 export default function Nav() {
   const [q, setQ] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -13,15 +33,24 @@ export default function Nav() {
   });
   const nav = useNavigate();
 
+  // Apply theme on mount and whenever it changes
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.setAttribute("data-theme", "dark");
-    } else {
-      root.removeAttribute("data-theme");
-    }
-    localStorage.setItem("theme", theme);
+    applyTheme(theme);
   }, [theme]);
+
+  // Keep in sync with system preference changes (e.g. user changes OS theme)
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (e: MediaQueryListEvent) => {
+      // Only follow system if user hasn't overridden it
+      const stored = localStorage.getItem("theme");
+      if (!stored) {
+        setTheme(e.matches ? "dark" : "light");
+      }
+    };
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
+  }, []);
 
   function toggleTheme() {
     setTheme((t) => (t === "dark" ? "light" : "dark"));

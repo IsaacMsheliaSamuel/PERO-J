@@ -5,6 +5,7 @@ import { db } from "./db.js";
 import { fetchTokenMetadata } from "./sep41Metadata.js";
 import { health } from "./index.js";
 import { eventEmitter } from "./events.js";
+import { MAX_TITLE_LEN, MAX_DESCRIPTION_LEN } from "./sanitize.js";
 
 const PORT = process.env.PORT || 3001;
 
@@ -65,7 +66,7 @@ export function validateContractPayload(body) {
     return "Request body must be a JSON object";
   }
 
-  const { id, name, functions } = body;
+  const { id, name, description, functions } = body;
 
   if (typeof id !== "string" || id.trim() === "") {
     return "id must be a non-empty string";
@@ -73,6 +74,14 @@ export function validateContractPayload(body) {
 
   if (typeof name !== "string" || name.trim() === "") {
     return "name must be a non-empty string";
+  }
+
+  if (name.length > MAX_TITLE_LEN) {
+    return `name exceeds maximum limit of ${MAX_TITLE_LEN} characters`;
+  }
+
+  if (typeof description === "string" && description.length > MAX_DESCRIPTION_LEN) {
+    return `description exceeds maximum limit of ${MAX_DESCRIPTION_LEN} characters`;
   }
 
   if (!Array.isArray(functions)) {

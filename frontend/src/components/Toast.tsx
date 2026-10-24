@@ -1,71 +1,162 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 
-export type ToastKind = "success" | "error" | "info";
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-export interface ToastItem {
-  id: number;
-  kind: ToastKind;
-  message: string;
+export type ToastVariant = "error" | "warning" | "info" | "success";
+
+export interface Toast {
+  id: string;
+  variant: ToastVariant;
+  title: string;
+  body?: string;
+  /** Auto-dismiss duration in ms. 0 = no auto-dismiss. Default: 6000 */
+  duration?: number;
 }
 
-export interface ToastApi {
-  push: (kind: ToastKind, message: string) => void;
-  success: (message: string) => void;
-  error: (message: string) => void;
+interface ToastContextValue {
+  addToast: (toast: Omit<Toast, "id">) => void;
+  removeToast: (id: string) => void;
 }
 
-const ToastContext = createContext<ToastApi | null>(null);
+// ---------------------------------------------------------------------------
+// Context
+// ---------------------------------------------------------------------------
 
-export function useToast(): ToastApi {
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within ToastProvider");
+  if (!ctx) throw new Error("useToast must be used inside <ToastProvider>");
   return ctx;
 }
 
-const TOAST_DISMISS_MS = 6000;
+// ---------------------------------------------------------------------------
+// Styling helpers
+// ---------------------------------------------------------------------------
 
-export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const nextId = useRef(1);
+const VARIANT_STYLES: Record<ToastVariant, React.CSSProperties> = {
+  error:   { background: "#3a1a1a", borderColor: "#cf222e", color: "#f9a8b0" },
+  warning: { background: "#3a2e0a", borderColor: "#9a6700", color: "#f0c85a" },
+  info:    { background: "#0d2044", borderColor: "#0969da", color: "#79b8ff" },
+  success: { background: "#0f2e18", borderColor: "#1a7f37", color: "#56d364" },
+};
 
-  const remove = useCallback((id: number) => {
-    setToasts((list) => list.filter((t) => t.id !== id));
+const VARIANT_ICONS: Record<ToastVariant, string> = {
+  error:   "✖",
+  warning: "⚠",
+  info:    "ℹ",
+  success: "✔",
+};
+
+// ---------------------------------------------------------------------------
+// ToastItem
+// ---------------------------------------------------------------------------
+
+function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) {
+  const style = VARIANT_STYLES[toast.variant];
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+        padding: "12px 14px",
+        borderRadius: 8,
+        border: `1px solid ${style.borderColor}`,
+        background: style.background,
+        color: style.color,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        maxWidth: 380,
+        wordBreak: "break-word",
+        animation: "toast-in 0.2s ease",
+      }}
+    >
+      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>
+        {VARIANT_ICONS[toast.variant]}
+      </span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{toast.title}</div>
+        {toast.body && (
+          <div style={{ fontSize: 13, marginTop: 4, opacity: 0.9 }}>{toast.body}</div>
+        )}
+      </div>
+      <button
+        onClick={onRemove}
+        aria-label="Dismiss notification"
+        style={{
+          background: "transparent",
+          color: "inherit",
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+          fontSize: 16,
+          lineHeight: 1,
+          flexShrink: 0,
+          opacity: 0.7,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ToastProvider
+// ---------------------------------------------------------------------------
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+    clearTimeout(timers.current[id]);
+    delete timers.current[id];
   }, []);
 
-  const push = useCallback(
-    (kind: ToastKind, message: string) => {
-      const id = nextId.current++;
-      setToasts((list) => [...list, { id, kind, message }]);
-      window.setTimeout(() => remove(id), TOAST_DISMISS_MS);
+  const addToast = useCallback(
+    (toast: Omit<Toast, "id">) => {
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const duration = toast.duration ?? 6000;
+      setToasts((prev) => [...prev, { ...toast, id }]);
+      if (duration > 0) {
+        timers.current[id] = setTimeout(() => removeToast(id), duration);
+      }
     },
-    [remove]
-  );
-
-  const api = useMemo<ToastApi>(
-    () => ({
-      push,
-      success: (message: string) => push("success", message),
-      error: (message: string) => push("error", message),
-    }),
-    [push]
+    [removeToast]
   );
 
   return (
-    <ToastContext.Provider value={api}>
+    <ToastContext.Provider value={{ addToast, removeToast }}>
       {children}
-      <div className="toast-stack" role="status" aria-live="polite">
+      <style>{`
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+      <div
+        aria-label="Notifications"
+        style={{
+          position: "fixed",
+          bottom: 20,
+          right: 20,
+          zIndex: 9999,
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          pointerEvents: "none",
+        }}
+      >
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.kind}`}>
-            <span style={{ flex: 1 }}>{t.message}</span>
-            <button
-              type="button"
-              className="toast-close"
-              aria-label="Dismiss notification"
-              onClick={() => remove(t.id)}
-            >
-              ×
-            </button>
+          <div key={t.id} style={{ pointerEvents: "auto" }}>
+            <ToastItem toast={t} onRemove={() => removeToast(t.id)} />
           </div>
         ))}
       </div>

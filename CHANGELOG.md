@@ -980,6 +980,8 @@ Issue [#118](../../issues/118) — Contract admin key management
 
 ### Documentation
 
+- Auto-update CHANGELOG.md [skip ci] ([`c7d4497`](../../commit/c7d4497bba68ac719ac432e88b604cccc0c0f484))
+
 - Auto-update CHANGELOG.md [skip ci] ([`fb86f46`](../../commit/fb86f4607288eb7143209c9283c75ff5a53719dc))
 
 - Auto-update CHANGELOG.md [skip ci] ([`04e03a1`](../../commit/04e03a1546f6295afacb20cfd1dd7098b25abc9c))
@@ -1424,6 +1426,16 @@ Issue [#999](../../issues/999) - Network and connection status indicator:
   - Restore the router App shell clobbered on main (missing App.css import)
     and fix pre-existing tsc errors (ContractsPage event_count, api.test.ts
     abort signal) so the branch typechecks clean
+
+
+- Configure one-command docker-compose local dev stack ([`7adde29`](../../commit/7adde29f74a29dfd4147289502c7248f102572f0))
+
+Bring up the full PERO-J stack with a single `docker compose up --build`,
+  addressing issue [#1016](../../issues/1016). The compose file now spins up PostgreSQL (with
+  migrations pre-applied), Redis, a Soroban local sandbox node, the indexer
+  API with hot-reload, and the frontend dev server with hot-reload, plus a
+  one-shot seed service that pre-seeds test markets and simulated user
+  accounts.
 
 
 - Configure database pool size ([`df7e5bb`](../../commit/df7e5bbd7b70c022f583f715bd716993b77d7f55))
